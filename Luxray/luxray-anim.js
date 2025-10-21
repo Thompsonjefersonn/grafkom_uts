@@ -51,26 +51,18 @@ export function createLuxray(gl, createMesh, meshes, opts = {}) {
     t += dt;
 
     // body: napas + (opsional) spin
-    const bob  = Math.sin(t * 2*Math.PI*p.breatheHz) * p.breatheAmp;
-    const base = mul(T(p.basePos[0], p.basePos[1] + bob, p.basePos[2]), RY(t * p.spin));
-    M.body   = base;
-    M.static = M.body; // static parts nempel ke body
+    // body: napas + (opsional) spin
+// body: napas + spin (tanpa wag)
+const bob  = Math.sin(t * 2*Math.PI*p.breatheHz) * p.breatheAmp;
+const base = mul(T(p.basePos[0], p.basePos[1] + bob, p.basePos[2]), RY(t * p.spin));
+M.body   = base;
+M.static = M.body;
 
-    // head & subtle yaw (jika ada)
-    if (buffers.head) {
-      const yaw = Math.sin(t * 2*Math.PI*p.headYawHz) * p.headYawAmp;
-      M.head = mul(M.body, aroundSafe(RY(yaw), P('head')));
-    }
-
-    // ears: ikut kepala, tidak goyang
-if (buffers.earL) M.earL = mul(M.head, T(0,0,0)); // langsung ikut kepala
-if (buffers.earR) M.earR = mul(M.head, T(0,0,0));
-
-    // tail wag — jika tail sudah digabung ke body (tidak ada buffer.tail) maka skip
-    if (buffers.tail) {
-      const wag = Math.sin(t * 2*Math.PI*p.tailHz) * p.tailAmp;
-      M.tail = mul(M.body, aroundSafe(RY(wag), P('tail')));
-    }
+// tail wag — tail mewarisi body, lalu diputar di pangkal
+if (buffers.tail) {
+  const wag = Math.sin(t * 2*Math.PI*p.tailHz) * p.tailAmp; // p.tailAmp ~ 0.3-0.4 enak
+  M.tail = mul(M.body, aroundSafe(RY(wag), P('tail')));      // pivot 'tail' = pangkal
+}
 
     // ----- kaki: step cycle -----
     const step = Math.sin(t * 2*Math.PI*p.stepHz) * p.stepAmp;

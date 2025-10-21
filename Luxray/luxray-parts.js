@@ -45,7 +45,7 @@ function meshToBuffers(createMesh, m){
   return createMesh(verts, faces);
 }
 
-// ---- main builder ----
+
 export function buildLuxrayParts(createMesh){
   const meshes = buildLuxrayMeshes();
 
@@ -58,10 +58,10 @@ export function buildLuxrayParts(createMesh){
     meshes.backFur, meshes.sideFurL, meshes.sideFurR,
     meshes.furBody1, meshes.furBody2, meshes.furBody3,
     meshes.frontConeL1, meshes.frontConeL2, meshes.frontConeL3,
-  meshes.frontConeR1, meshes.frontConeR2, meshes.frontConeR3,
-  tailCombined
+  meshes.frontConeR1, meshes.frontConeR2, meshes.frontConeR3
   );
 
+  
   
 const nose    = meshes.nose    ?? meshes.noseMain ?? null;
 const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
@@ -126,6 +126,7 @@ const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
     head: headCombined,
     earL, earR,
     legFL, legFR, legBL, legBR,
+    tail: tailCombined,
   };
 
   // convert mesh → GPU buffer
@@ -137,14 +138,45 @@ const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
   if (staticMerged) buffers.static = meshToBuffers(createMesh, staticMerged);
 
   // ---- pivot per bagian ----
-  const pivots = {};
-  if (parts.head) pivots.head = boundsOf(parts.head).center;
-  if (parts.earL) pivots.earL = boundsOf(parts.earL).center;
-  if (parts.earR) pivots.earR = boundsOf(parts.earR).center;
-  if (parts.legFL) pivots.legFL = boundsOf(parts.legFL).max;
-  if (parts.legFR) pivots.legFR = boundsOf(parts.legFR).max;
-  if (parts.legBL) pivots.legBL = boundsOf(parts.legBL).max;
-  if (parts.legBR) pivots.legBR = boundsOf(parts.legBR).max;
+  // ---- pivot per bagian ----
+const pivots = {};
+if (parts.head) pivots.head = boundsOf(parts.head).center;
+if (parts.earL) pivots.earL = boundsOf(parts.earL).center;
+if (parts.earR) pivots.earR = boundsOf(parts.earR).center;
+if (parts.legFL) pivots.legFL = boundsOf(parts.legFL).max;
+if (parts.legFR) pivots.legFR = boundsOf(parts.legFR).max;
+if (parts.legBL) pivots.legBL = boundsOf(parts.legBL).max;
+if (parts.legBR) pivots.legBR = boundsOf(parts.legBR).max;
+
+if (parts.tail) {
+  const bbTail = boundsOf(parts.tail);
+  const bbBody = boundsOf(parts.body);
+
+  // vektor dari body → tail, untuk tau arah ekor relatif ke body
+  const dx = bbTail.center[0] - bbBody.center[0];
+  const dy = bbTail.center[1] - bbBody.center[1];
+  const dz = bbTail.center[2] - bbBody.center[2];
+
+  // pilih sumbu dominan (arah ekor dari body)
+  let axis = 0;
+  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > Math.abs(dz)) axis = 1;
+  else if (Math.abs(dz) > Math.abs(dx) && Math.abs(dz) > Math.abs(dy)) axis = 2;
+
+  // koordinat anchor = permukaan tail yang menghadap body pada sumbu dominan
+  const base = [bbTail.center[0], bbTail.center[1], bbTail.center[2]];
+  // jika tail center berada di +axis relatif ke body, pakai sisi min; kalau di -axis, pakai sisi max
+  base[axis] = ( (axis===0?dx:axis===1?dy:dz) > 0 ) ? bbTail.min[axis] : bbTail.max[axis];
+
+  // untuk dua sumbu lain, "snap" ke overlap body agar pangkal benar-benar menempel (tanpa geser aneh)
+  for (let a of [0,1,2]) if (a !== axis) {
+    const lo = bbTail.min[a], hi = bbTail.max[a];
+    const t  = bbBody.center[a];
+    // clamp posisi anchor ke permukaan tail di sumbu ini
+    base[a] = Math.max(lo, Math.min(hi, t));
+  }
+
+  pivots.tail = base;
+}
 
   return { buffers, pivots };
 }
