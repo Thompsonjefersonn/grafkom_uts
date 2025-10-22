@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luxio & Luxray — Advanced Anim</title>
+  <style>
+    html,body,canvas{margin:0;height:100%;width:100%;display:block;background:#bfe7ff}
+    #hint{
+      position:fixed;left:12px;bottom:12px;background:#0008;color:#fff;
+      font:12px/1.4 system-ui;padding:8px 10px;border-radius:6px
+    }
+  </style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · G: flip Luxray · H: flip Shinx</div>
+
+<script type="module">
+import { createLuxio }  from './Luxio/luxio-anim.js';
+import { createLuxray } from './Luxray/luxray-anim.js';
+import { createShinx }  from './Shinx/shinx-anim.js';
+
+/* ---------- WebGL setup ---------- */
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { antialias:true });
+if(!gl){ alert('WebGL tidak tersedia'); throw new Error('No WebGL'); }
+
+const vsSrc = `
+attribute vec3 aPosition;
+attribute vec3 aColor;
+uniform mat4 uProj, uView, uModel;
+varying vec3 vColor;
+void main(){
+  gl_Position = uProj * uView * uModel * vec4(aPosition, 1.0);
+  vColor = aColor;
+}`;
+const fsSrc = `
+precision mediump float;
+varying vec3 vColor;
+void main(){ gl_FragColor = vec4(vColor, 1.0); }`;
+
+function compile(src, type){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(s));
+    throw new Error('shader compile error');
+  }
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(vsSrc, gl.VERTEX_SHADER));
+gl.attachShader(prog, compile(fsSrc, gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+  throw new Error('link error');
+}
+gl.useProgram(prog);
+
+const loc = {
+  aPosition: gl.getAttribLocation(prog, 'aPosition'),
+  aColor:    gl.getAttribLocation(prog, 'aColor'),
+  uProj:     gl.getUniformLocation(prog, 'uProj'),
+  uView:     gl.getUniformLocation(prog, 'uView'),
+  uModel:    gl.getUniformLocation(prog, 'uModel'),
+};
+gl.enableVertexAttribArray(loc.aPosition);
+gl.enableVertexAttribArray(loc.aColor);
+
+function createMesh(vertices, indices){
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER,
+    vertices instanceof Float32Array ? vertices : new Float32Array(vertices),
+    gl.STATIC_DRAW);
+
+  const ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+    indices instanceof Uint16Array ? indices : new Uint16Array(indices),
+    gl.STATIC_DRAW);
+
+  return { vb, ib, count: (indices.length || indices.byteLength/2) };
+}
+function drawMesh(buffers, model, wireframe=false){
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vb);
+  gl.vertexAttribPointer(loc.aPosition, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(loc.aColor,    3, gl.FLOAT, false, 24, 12);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.ib);
+  gl.uniformMatrix4fv(loc.uModel, false, model);
+  gl.drawElements(wireframe ? gl.LINES : gl.TRIANGLES, buffers.count, gl.UNSIGNED_SHORT, 0);
+}
+
+/* ---------- env ---------- */
+function makeFlatPlane(size=200, y=0, color=[0.55,0.85,0.45]){
+  const x0=-size, x1=size, z0=-size, z1=size;
+  const verts = new Float32Array([
+    x0,y,z0,  color[0],color[1],color[2],
+    x1,y,z0,  color[0],color[1],color[2],
+    x1,y,z1,  color[0],color[1],color[2],
+    x0,y,z1,  color[0],color[1],color[2],
+  ]);
+  const idx = new Uint16Array([0,1,2,  0,2,3]);
+  return createMesh(verts, idx);
+}
+function makeGrassField(area=40, count=900){
+  const verts=[], idx=[];
+  function addQuad(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, c){
+    const base = verts.length/6;
+    verts.push(
+      x0,y0,z0,  c[0],c[1],c[2],
+      x1,y1,z1,  c[0],c[1],c[2],
+      x2,y2,z2,  c[0],c[1],c[2],
+      x3,y3,z3,  c[0],c[1],c[2],
+    );
+    idx.push(base+0, base+1, base+2,  base+0, base+2, base+3);
+  }
+  for(let i=0;i<count;i++){
+    const x = (Math.random()*2-1)*area;
+    const z = (Math.random()*2-1)*area;
+    const y = 0;
+    const w = 0.05 + Math.random()*0.06;
+    const h = 0.12 + Math.random()*0.22;
+    const dark = 0.85 + Math.random()*0.15;
+    const c = [0.35*dark, 0.65*dark, 0.25*dark];
+    addQuad(x-w,y,z, x+w,y,z, x+w,y+h,z, x-w,y+h,z, c);
+    addQuad(x,y,z-w, x,y,z+w, x,y+h,z+w, x,y+h,z-w, c);
+  }
+  return createMesh(new Float32Array(verts), new Uint16Array(idx));
+}
+
+/* ---------- tiny mat4 & camera ---------- */
+const I = ()=>new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+function mul(A,B){
+  const m=new Float32Array(16);
+  for(let r=0;r<4;r++) for(let c=0;c<4;c++)
+    m[c+4*r]=A[4*r+0]*B[c+0]+A[4*r+1]*B[c+4]+A[4*r+2]*B[c+8]+A[4*r+3]*B[c+12];
+  return m;
+}
+const T=(x,y,z)=>{const m=I(); m[12]=x; m[13]=y; m[14]=z; return m;};
+const RX=a=>{const c=Math.cos(a),s=Math.sin(a);const m=I();m[5]=c;m[6]=s;m[9]=-s;m[10]=c;return m;};
+const RY=a=>{const c=Math.cos(a),s=Math.sin(a);const m=I();m[0]=c;m[2]=s;m[8]=-s;m[10]=c;return m;};
+const P=(fov,aspect,near,far)=>{
+  const f=1/Math.tan(fov*0.5), nf=1/(near-far);
+  const m=new Float32Array(16);
+  m[0]=f/aspect; m[5]=f; m[10]=(far+near)*nf; m[11]=-1; m[14]=2*far*near*nf;
+  return m;
+};
+function lookAt(eye, center, up=[0,1,0]){
+  const zx=eye[0]-center[0], zy=eye[1]-center[1], zz=eye[2]-center[2];
+  let zl=Math.hypot(zx,zy,zz); const z0=zx/zl, z1=zy/zl, z2=zz/zl;
+  let xx=up[1]*z2-up[2]*z1, xy=up[2]*z0-up[0]*z2, xz=up[0]*z1-up[1]*z0;
+  let xl=Math.hypot(xx,xy,xz); xx/=xl; xy/=xl; xz/=xl;
+  const y0=z1*xz - z2*xy, y1=z2*xx - z0*xz, y2=z0*xy - z1*xx;
+  const m=new Float32Array(16);
+  m[0]=xx; m[4]=xy; m[8]=xz;  m[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+  m[1]=y0; m[5]=y1; m[9]=y2;  m[13]=-(y0*eye[0]+y1*eye[1]+y2*eye[2]);
+  m[2]=z0; m[6]=z1; m[10]=z2; m[14]=-(z0*eye[0]+z1*eye[1]+z2*eye[2]);
+  m[3]=0;  m[7]=0;  m[11]=0;  m[15]=1;
+  return m;
+}
+
+// FPS cam
+let camPos   = [0, 2.0, 8.0];     // posisi awal oke di +Z
+let camYaw   = Math.PI;           // <— awalnya 0.0, ganti 180° biar lihat ke -Z (ke belakang)
+let camPitch = -0.15;             // tetap sedikit menunduk
+function getForward(){const cy=Math.cos(camYaw),sy=Math.sin(camYaw),cp=Math.cos(camPitch),sp=Math.sin(camPitch);return [sy*cp,sp,cy*cp];}
+function getRight(){const f=getForward(), up=[0,1,0]; const rx=f[1]*up[2]-f[2]*up[1], ry=f[2]*up[0]-f[0]*up[2], rz=f[0]*up[1]-f[1]*up[0]; const l=Math.hypot(rx,ry,rz); return [rx/l,ry/l,rz/l];}
+function getView(){const f=getForward();return lookAt(camPos,[camPos[0]+f[0],camPos[1]+f[1],camPos[2]+f[2]]);}
+
+let dragging=false,lastX=0,lastY=0; const LOOK_SENS=1.8;
+canvas.addEventListener('mousedown', e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+window.addEventListener('mouseup', ()=> dragging=false);
+window.addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  const dx=(e.clientX-lastX)/canvas.clientWidth, dy=(e.clientY-lastY)/canvas.clientHeight;
+  camYaw+=dx*LOOK_SENS; camPitch-=dy*LOOK_SENS;
+  camPitch=Math.max(-1.35,Math.min(1.35,camPitch)); lastX=e.clientX; lastY=e.clientY;
+});
+const keys=new Set();
+window.addEventListener('keydown', e=>{keys.add(e.key.toLowerCase());});
+window.addEventListener('keyup',   e=>{keys.delete(e.key.toLowerCase());});
+canvas.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  const dir=getForward(), step=(e.deltaY>0?-1:1)*0.9;
+  camPos[0]+=dir[0]*step; camPos[1]+=dir[1]*step; camPos[2]+=dir[2]*step;
+},{passive:false});
+
+function resize(){
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0.75,0.91,1.00,1);
+
+/* ---------- init 3 model ---------- */
+// POSISI: Luxio kiri (-x), Shinx tengah, Luxray kanan (+x)
+const Luxio  = createLuxio (gl, createMesh,  undefined, { position: [-5,0,0] });
+const Shinx  = createShinx (gl, createMesh,  undefined, { position: [0, 0, 0] });
+const Luxray = createLuxray(gl, createMesh, undefined, { position: [5, 0, 0] });
+ 
+
+// Jika signature Luxray masih (gl, createMesh, meshes, opts):
+// const Luxray = createLuxray(gl, createMesh, undefined, { position: [5,0,0] });
+
+window.addEventListener('keydown', (e)=>{
+  const k=e.key.toLowerCase();
+  if (k==='f') Luxio.flip?.('x');
+  if (k==='g') Luxray.flip?.('x');
+  if (k==='h') Shinx.flip?.('x');
+});
+Luxio.params.enableGroundSnap = true;
+Luxio.params.groundY = 0.0;
+
+/* ---------- env meshes ---------- */
+const groundPlane = makeFlatPlane(200, 0.0, [0.55,0.85,0.45]);
+const grassField  = makeGrassField(40, 900);
+
+/* ---------- loop ---------- */
+let last=0;
+const MODEL_Y = 1.0;              // angkat semua part dari tanah
+const baseOffset = T(0, MODEL_Y, 0);
+
+function tick(ms){
+  resize();
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  const t=ms*0.001;
+  const dt=Math.min(0.05,(last?t-last:0.016)); last=t;
+
+  const speed=(keys.has('shift')?12:6), step=speed*dt;
+  const f=getForward(), r=getRight();
+  if(keys.has('w')){ camPos[0]+=f[0]*step; camPos[1]+=f[1]*step; camPos[2]+=f[2]*step; }
+  if(keys.has('s')){ camPos[0]-=f[0]*step; camPos[1]-=f[1]*step; camPos[2]-=f[2]*step; }
+  if(keys.has('a')){ camPos[0]-=r[0]*step; camPos[1]-=r[1]*step; camPos[2]-=r[2]*step; }
+  if(keys.has('d')){ camPos[0]+=r[0]*step; camPos[1]+=r[1]*step; camPos[2]+=r[2]*step; }
+  if(keys.has('q')) camPos[1]-=step;
+  if(keys.has('e')) camPos[1]+=step;
+  camPos[1]=Math.max(0.5,camPos[1]);
+
+  const proj=P(Math.PI/4, canvas.width/canvas.height, 0.1, 500);
+  const view=getView();
+  gl.uniformMatrix4fv(loc.uProj,false,proj);
+  gl.uniformMatrix4fv(loc.uView,false,view);
+
+  gl.uniformMatrix4fv(loc.uModel,false,I());
+  drawMesh(groundPlane,I(),false);
+  drawMesh(grassField,I(),false);
+
+  Luxio.update(dt);
+  Shinx.update(dt);
+  Luxray.update(dt);
+
+  const D=(buf,mat)=> drawMesh(buf, mul(baseOffset, mat), false);
+
+
+
+
+// --- draw LUXRAY dulu ---
+let B = Luxray.buffers, M = Luxray.M;
+if (B.body)  D(B.body,  M.body);
+if (B.head)  D(B.head,  M.head);
+if (B.eyeWhiteL) D(B.eyeWhiteL, M.head);
+if (B.eyeWhiteR) D(B.eyeWhiteR, M.head);
+if (B.eyeYellowL) D(B.eyeYellowL, M.head);
+if (B.eyeYellowR) D(B.eyeYellowR, M.head);
+if (B.irisL) D(B.irisL, M.head);
+if (B.irisR) D(B.irisR, M.head);
+if (B.ringL) D(B.ringL, M.head);
+if (B.ringR) D(B.ringR, M.head);
+
+if (B.earL)  D(B.earL,  M.head);
+if (B.earR)  D(B.earR,  M.head);
+
+if (B.nose)    D(B.nose,    M.head);
+if (B.noseFur) D(B.noseFur, M.head);
+if (B.smile)   D(B.smile,   M.head);
+
+
+
+if (B.legFL) D(B.legFL, M.legFL);
+if (B.legFR) D(B.legFR, M.legFR);
+if (B.legBL) D(B.legBL, M.legBL);
+if (B.legBR) D(B.legBR, M.legBR);
+if (B.static)D(B.static,M.static);
+
+
+
+// --- draw SHINX (tengah) ---
+B = Shinx.buffers; M = Shinx.M;
+if (B.body)  D(B.body,  M.body);
+if (B.head)  D(B.head,  M.head);
+if (B.tail)  D(B.tail,  M.tail);
+if (B.legFL) D(B.legFL, M.legFL);
+if (B.legFR) D(B.legFR, M.legFR);
+if (B.legBL) D(B.legBL, M.legBL);
+if (B.legBR) D(B.legBR, M.legBR);
+
+// --- lalu LUXIO ---
+B = Luxio.buffers; M = Luxio.M;
+if (B.body)  D(B.body,  M.body);
+if (B.head)  D(B.head,  M.head);
+if (B.earL)  D(B.earL,  M.earL);
+if (B.earR)  D(B.earR,  M.earR);
+if (B.legFL) D(B.legFL, M.legFL);
+if (B.legFR) D(B.legFR, M.legFR);
+if (B.legBL) D(B.legBL, M.legBL);
+if (B.legBR) D(B.legBR, M.legBR);
+if (B.static)D(B.static,M.static);
+
+
+
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
