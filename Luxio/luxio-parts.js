@@ -42,61 +42,64 @@ function meshToBuffers(createMesh, m){
 }
 
 export function buildLuxioParts(createMesh){
-  const meshes = buildLuxioMeshes();
+  const m = buildLuxioMeshes();
 
-  // === limbs (leg+foot+claws + ring mapping: FL: ring1+ring3, FR: ring2+ring4) ===
-  const limbFL = mergeList(meshes.leg1, meshes.foot1, (meshes.claws1 ?? null), meshes.ring1 ?? null, meshes.ring3 ?? null);
-  const limbFR = mergeList(meshes.leg2, meshes.foot2, (meshes.claws4 ?? null), meshes.ring2 ?? null, meshes.ring4 ?? null);
-  const limbBL = mergeList(meshes.leg3, meshes.foot3, (meshes.claws3 ?? null));
-  const limbBR = mergeList(meshes.leg4, meshes.foot4, (meshes.claws5 ?? null));
+  // === Head (semua yang harus ikut head yaw/tilt) ===
+  const head = mergeList(
+    m.sphere , 
+    m.nose, m.smile,
+    m.eyeWhiteL, m.eyeWhiteR,
+    m.eyeYellowL, m.eyeYellowR,
+    m.cover2, m.selimut  ,m.sideleft1 , m.sideleft2  , m.topCone1 , m.backConeTop1
+    // pindahkan ke body kalau ternyata bukan bagian kepala
+  );
 
-  // === tail + star digabung, lalu disatukan ke body ===
-  const tailCombined   = mergeList(meshes.tail, meshes.star);
-  const bodyCombined   = mergeList(meshes.body, tailCombined); // <-- BODY + TAIL(+STAR)
+  // === Ears (ikut head, tapi dipisah biar bisa twitch) ===
+  const earL = mergeList(m.earLeft,  m.earInnerL);
+  const earR = mergeList(m.earRight, m.earInnerR);
 
-  const part = {
-    // body sudah termasuk tail + star
-    body: bodyCombined,
+  // === Tail (biar bisa wag/counter di anim, JANGAN gabung ke body) ===
+  const tail = mergeList(m.tail, m.star);
 
-    // tidak ada 'tail' / 'star' lagi sebagai part terpisah
-    earL: meshes.earLeft,
-    earR: meshes.earRight,
+  // === Limbs (leg + foot + claws + ring) ===
+  const legFL = mergeList(m.leg1, m.foot1, m.claws1, m.ring1, m.ring3 , m.thighLeft);
+  const legFR = mergeList(m.leg2, m.foot2, m.claws4, m.ring2, m.ring4 , m.thighRight);
+  const legBL = mergeList(m.leg3, m.foot3, m.claws3);
+  const legBR = mergeList(m.leg4, m.foot4, m.claws5);
 
-    // limbs nyatu
-    legFL: limbFL,
-    legFR: limbFR,
-    legBL: limbBL,
-    legBR: limbBR,
-  };
+  // === Body (semua dekorasi yang harus ikut badan, BUKAN head/ear/tail) ===
+  const body = mergeList(
+    m.body,
+    m.cone, m.cone1, m.cone2, m.cone3, m.cone4, m.cone5, m.selimut2  
+  );
 
-  // === statis (jangan masukkan star, karena sudah menyatu ke body) ===
-  const staticList = [
-    meshes.nose, meshes.smile,
-    meshes.cone, meshes.cone1, meshes.cone2, meshes.cone3, meshes.cone4, meshes.cone5,
-    meshes.sideConeTop1, meshes.sideConeBottom1, meshes.sideConeBottom2, meshes.sideConeTop2, meshes.backConeTop1,
-    meshes.topCone1, meshes.earInnerL, meshes.earInnerR,
-    meshes.eyeWhiteL, meshes.eyeWhiteR, meshes.eyeYellowL, meshes.eyeYellowR,
-    meshes.cover2, meshes.selimut, meshes.selimut2, meshes.sideleft1, meshes.sideleft2,
-    meshes.thighLeft, meshes.thighRight,
-    meshes.sphere
-  ].filter(Boolean);
+  // === Static (benar-benar benda yang tidak ikut body/head/ear/tail/limbs) ===
+  // Biasanya KOSONG untuk karakter; kalau kamu isi, ia akan digambar pakai M.static (= M.body)
+  const staticMerged = null;
 
-  const staticMerged = staticList.length ? mergeMeshes(staticList) : null;
+  const part = { body, head, earL, earR, tail, legFL, legFR, legBL, legBR };
 
   // buffers
   const buffers = {};
-  for (const [k,m] of Object.entries(part)) if (m) buffers[k] = meshToBuffers(createMesh, m);
+  for (const [k,pm] of Object.entries(part)) if (pm) buffers[k] = meshToBuffers(createMesh, pm);
   if (staticMerged) buffers.static = meshToBuffers(createMesh, staticMerged);
 
-  // pivots — tidak ada pivot tail lagi; pivot telinga & kaki tetap
+  // pivots — dipakai aroundSafe() di anim
   const pivots = {
-    earL: boundsOf(part.earL).center,
-    earR: boundsOf(part.earR).center,
-
-    legFL: boundsOf(part.legFL).max,
-    legFR: boundsOf(part.legFR).max,
-    legBL: boundsOf(part.legBL).max,
-    legBR: boundsOf(part.legBR).max,
+    body:  boundsOf(body ).center,   // aman
+    head:  boundsOf(head ).center,
+    tail:  boundsOf(tail ).center,   // atau pakai min/max sesuai joint-mu
+    earL:  boundsOf(earL ).max,
+    earR:  boundsOf(earR ).max,
+    // kaki: pakai max (kebiasaanmu) biar pivot di “pangkal”
+    legFL: boundsOf(legFL).max,
+    legFR: boundsOf(legFR).max,
+    legBL: boundsOf(legBL).max,
+    legBR: boundsOf(legBR).max,
+    footFL: boundsOf(legFL).min, // opsional kalau kamu punya part foot terpisah
+    footFR: boundsOf(legFR).min,
+    footBL: boundsOf(legBL).min,
+    footBR: boundsOf(legBR).min,
   };
 
   return { buffers, pivots };

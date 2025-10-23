@@ -20,104 +20,109 @@ function computePivot(vertices){
   return [sx/n, sy/n, sz/n];
 }
 
-export function buildShinxParts(){
-  const m = buildShinxMeshes(); // object berisi semua mesh (vertices, faces)
-  // Pemetaan nama “ramah”
-  const nameMap = {
-    sphere: 'head',
-    body: 'body',
-    cone: 'neckCone',
-    earLeft: 'earL',
-    earRight: 'earR',
-    leg1: 'legFL', leg2: 'legFR', leg3: 'legBL', leg4: 'legBR',
-    foot1: 'footFL', foot2: 'footFR', foot3: 'footBL', foot4: 'footBR',
-    tail: 'tail',
-    ring1: 'ringFL', ring2: 'ringFR',
-    nose: 'nose',
-    smile: 'smile',
-    star: 'tailStar',
-    starLeft: 'starL', starRight: 'starR',
-    topCone1: 'tuft1', topCone2: 'tuft2',
-    cone1: 'cone1', cone2: 'cone2', cone3: 'cone3', cone4: 'cone4', cone5: 'cone5',
-    sideConeTop1: 'sideConeTopR', sideConeTop2: 'sideConeTopL',
-    sideConeBottom1: 'sideConeBotR', sideConeBottom2: 'sideConeBotL',
-    triLeft: 'cheekL', triRight: 'cheekR',
-    eyeLeft: 'eyeL', eyeRight: 'eyeR'
+// ---- util ----
+function mergeMeshes(meshes) {
+  let vertices = [], faces = [], offset = 0;
+  for (let m of meshes) {
+    if (!m || !m.vertices) continue;
+    vertices.push(...m.vertices);
+    for (let f of (m.faces || [])) {
+      faces.push(f + offset);
+    }
+    offset += m.vertices.length / 6;
+  }
+  return { vertices, faces };
+}
+
+function mergeList(...items) {
+  const list = [];
+  for (const it of items) {
+    if (it && it.vertices) list.push(it);
+  }
+  return list.length ? mergeMeshes(list) : null;
+}
+
+function boundsOf(mesh) {
+  if (!mesh || !mesh.vertices || !mesh.faces)
+    return [0,0,0,0,0,0];
+  const v = mesh.vertices;
+  const min=[+Infinity,+Infinity,+Infinity], max=[-Infinity,-Infinity,-Infinity];
+  for (let i = 0; i < v.length; i += 6) {
+    if (v[i] < min[0]) min[0] = v[i];
+    if (v[i] > max[0]) max[0] = v[i];
+    if (v[i+1] < min[1]) min[1] = v[i+1];
+    if (v[i+1] > max[1]) max[1] = v[i+1];
+    if (v[i+2] < min[2]) min[2] = v[i+2];
+    if (v[i+2] > max[2]) max[2] = v[i+2];
+  }
+  return [min[0],min[1],min[2],max[0],max[1],max[2]];
+}
+
+function meshToBuffers(createMesh, m){
+  if (!m) return null;
+  return createMesh(m.vertices, m.faces);
+}
+
+// ---- main builder ----
+export function buildShinxParts(createMesh){
+  const meshes = buildShinxMeshes();
+
+  // group parts exactly matching tes2.html
+  // Part 1: Head (Tidak berdenyut)
+  const headMeshes = [
+    meshes.sphere, meshes.earLeft, meshes.earRight, meshes.topCone1, meshes.topCone2, 
+    meshes.nose, meshes.smile, meshes.starLeft, meshes.starRight, meshes.eyeLeft, meshes.eyeRight, 
+    meshes.sideConeTop1, meshes.sideConeTop2, meshes.sideConeBottom1, meshes.sideConeBottom2
+  ];
+  
+  // Part 2: Tail (Tidak berdenyut)
+  const tailMeshes = [
+    meshes.tail, meshes.star, meshes.cone1, meshes.cone2, 
+    meshes.cone3, meshes.cone4, meshes.cone5
+  ];
+
+  // Part 3: Body Core (Berdenyut)
+  const bodyMeshes = [meshes.body, meshes.cone, meshes.triLeft, meshes.triRight];
+  
+  // Part 4: Kaki-kaki (Tidak berubah)
+  const legFLMeshes = [
+    meshes.leg1, meshes.foot1, meshes.ring1,
+    meshes.claws1, meshes.claws2, meshes.claws3
+  ];
+  const legFRMeshes = [
+    meshes.leg2, meshes.foot2, meshes.ring2,
+    meshes.claws4, meshes.claws5, meshes.claws6
+  ];
+  const legBLMeshes = [
+    meshes.leg3, meshes.foot3,
+    meshes.claws10, meshes.claws11, meshes.claws12
+  ];
+  const legBRMeshes = [
+    meshes.leg4, meshes.foot4,
+    meshes.claws7, meshes.claws8, meshes.claws9
+  ];
+
+  // merge and create buffers
+  const parts = {
+    head:    mergeList(...headMeshes),
+    body:    mergeList(...bodyMeshes), 
+    tail:    mergeList(...tailMeshes),
+    legFL:   mergeList(...legFLMeshes),
+    legFR:   mergeList(...legFRMeshes),
+    legBL:   mergeList(...legBLMeshes),
+    legBR:   mergeList(...legBRMeshes)
   };
 
-  const parts = [];
-  for(const key of Object.keys(m)){
-    const mesh = m[key];
-    const name = nameMap[key] || key;
-
-    const vertices = toFloat32(mesh.vertices);
-    const part = {
-      name,
-      mesh: {
-        vertices,
-        faces: toFloat32(mesh.faces || []), // faces dipakai untuk index buffer
-      },
-      baseVertices: cloneArray(vertices),   // backup untuk reset tiap frame
-      pivot: computePivot(vertices)
-    };
-    parts.push(part);
-  }
-
-  // buat lookup by name
-  const index = Object.fromEntries(parts.map((p,i)=>[p.name,i]));
-
-  return { parts, index };
-}
-
-// -------- transforms (dipakai juga oleh anim) --------
-export function resetPart(part){
-  part.mesh.vertices.set(part.baseVertices);
-}
-
-export function translate(part, tx, ty, tz){
-  const v = part.mesh.vertices;
-  for(let i=0;i<v.length;i+=6){
-    v[i]   += tx;
-    v[i+1] += ty;
-    v[i+2] += tz;
-  }
-  part.pivot = [part.pivot[0]+tx, part.pivot[1]+ty, part.pivot[2]+tz];
-}
-
-function rotateAround(part, angle, axis, cx, cy, cz){
-  const v = part.mesh.vertices;
-  const c = Math.cos(angle), s = Math.sin(angle);
-  for(let i=0;i<v.length;i+=6){
-    let x = v[i]-cx, y=v[i+1]-cy, z=v[i+2]-cz;
-    let x2=x, y2=y, z2=z;
-    if(axis==='x'){ y2 = y*c - z*s; z2 = y*s + z*c; }
-    else if(axis==='y'){ x2 =  x*c + z*s; z2 = -x*s + z*c; }
-    else if(axis==='z'){ x2 = x*c - y*s; y2 = x*s + y*c; }
-    v[i]=x2+cx; v[i+1]=y2+cy; v[i+2]=z2+cz;
-  }
-}
-export function rotateX(part, ang, pivot=part.pivot){ rotateAround(part, ang,'x', ...pivot); }
-export function rotateY(part, ang, pivot=part.pivot){ rotateAround(part, ang,'y', ...pivot); }
-export function rotateZ(part, ang, pivot=part.pivot){ rotateAround(part, ang,'z', ...pivot); }
-
-// -------- merge untuk render (gabung semua parts ke satu big-buffer) --------
-export function mergeForDraw(parts){
-  // gabung vertices & buat index triangles dari faces
-  let totalV = 0, totalI = 0;
-  for(const p of parts){ totalV += p.mesh.vertices.length; totalI += p.mesh.faces.length; }
-
-  const vertices = new Float32Array(totalV);
-  const indices  = new Uint32Array(totalI);
-  let vo=0, io=0, base=0;
-
-  for(const p of parts){
-    vertices.set(p.mesh.vertices, vo);
-    for(let i=0;i<p.mesh.faces.length;i++){
-      indices[io+i] = p.mesh.faces[i] + base;
+  // create buffers and pivots
+  const buffers = {};
+  const pivots = {};
+  
+  for (let [name, mesh] of Object.entries(parts)) {
+    if (mesh) {
+      buffers[name] = meshToBuffers(createMesh, mesh);
+      pivots[name] = computePivot(mesh.vertices);
     }
-    base += p.mesh.vertices.length/6;
-    vo += p.mesh.vertices.length;
-    io += p.mesh.faces.length;
   }
-  return { vertices, indices };
+
+  return { buffers, pivots };
 }

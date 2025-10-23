@@ -1,180 +1,203 @@
-// luxio-anim.js
-import { buildLuxioParts } from '../Luxio/luxio-parts.js';
+// shinx-anim.js
+import { buildShinxParts } from './shinx-parts.js';
 
-export function createLuxio(gl, createMesh, meshes, opts = {}) {
-  const { buffers, pivots } = buildLuxioParts(createMesh, meshes);
+export function createShinx(gl, createMesh, meshes, opts = {}) {
+  const { buffers, pivots } = buildShinxParts(createMesh, meshes);
 
-  // -------- mini mat4 --------
-  const I = () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const mul = (A,B) => {
-    const m = new Float32Array(16);
-    for (let r=0; r<4; r++) for (let c=0; c<4; c++)
-      m[c+4*r] = A[4*r+0]*B[c+0] + A[4*r+1]*B[c+4] + A[4*r+2]*B[c+8] + A[4*r+3]*B[c+12];
-    return m;
+  // -------- LIBS functions (matching tes2.html) --------
+  const get_I4 = () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  const translate = (m, x, y, z) => { m[12]+=x; m[13]+=y; m[14]+=z; };
+  const translateZ = (m,t)=>{ m[14]+=t; };
+  const rotateX = (m,ang)=> {
+    let c=Math.cos(ang), s=Math.sin(ang);
+    let mv1=m[1], mv5=m[5], mv9=m[9], mv13=m[13];
+    m[1]=c*m[1]-s*m[2]; m[5]=c*m[5]-s*m[6]; m[9]=c*m[9]-s*m[10]; m[13]=c*m[13]-s*m[14];
+    m[2]=c*m[2]+s*mv1; m[6]=c*m[6]+s*mv5; m[10]=c*m[10]+s*mv9; m[14]=c*m[14]+s*mv13;
   };
-  const T  = (x,y,z)=>{const m=I(); m[12]=x; m[13]=y; m[14]=z; return m;};
-  const RX = a => { const c=Math.cos(a), s=Math.sin(a); const m=I(); m[5]=c; m[6]=s; m[9]=-s; m[10]=c; return m; };
-  const RY = a => { const c=Math.cos(a), s=Math.sin(a); const m=I(); m[0]=c; m[2]=s; m[8]=-s; m[10]=c; return m; };
-  const RZ = a => { const c=Math.cos(a), s=Math.sin(a); const m=I(); m[0]=c; m[1]=s; m[4]=-s; m[5]=c; return m; };
-
-  // pivots
-  const P = (name) => {
-    const p = pivots && pivots[name];
-    return (p && p.length === 3) ? p : [0,0,0];
+  const rotateY = (m,ang)=> {
+    let c=Math.cos(ang), s=Math.sin(ang);
+    let mv0=m[0], mv4=m[4], mv8=m[8], mv12=m[12];
+    m[0]=c*m[0]+s*m[2]; m[4]=c*m[4]+s*m[6]; m[8]=c*m[8]+s*m[10]; m[12]=c*m[12]+s*m[14];
+    m[2]=c*m[2]-s*mv0; m[6]=c*m[6]-s*mv4; m[10]=c*m[10]-s*mv8; m[14]=c*m[14]-s*mv12;
   };
-  const aroundSafe = (R, pivot) => {
-    const p = (pivot && pivot.length === 3) ? pivot : [0,0,0];
-    return mul(T(p[0],p[1],p[2]), mul(R, T(-p[0],-p[1],-p[2])));
+  const scale = (m, sx, sy, sz) => {
+    m[0]*=sx; m[1]*=sx; m[2]*=sx; m[3]*=sx;
+    m[4]*=sy; m[5]*=sy; m[6]*=sy; m[7]*=sy;
+    m[8]*=sz; m[9]*=sz; m[10]*=sz; m[11]*=sz;
   };
 
   // matrices
   const M = {
-    body:I(), head:I(), earL:I(), earR:I(), tail:I(),
-    legFL:I(), legFR:I(), legBL:I(), legBR:I(),
-    footFL:I(), footFR:I(), footBL:I(), footBR:I(),
-    clawsFL:I(), clawsFR:I(), clawsBL:I(), clawsBR:I(),
-    static:I()
+    head: get_I4(),
+    tail: get_I4(), 
+    body: get_I4(),
+    legFL: get_I4(),
+    legFR: get_I4(),
+    legBL: get_I4(),
+    legBR: get_I4()
   };
 
-  let t = 0;
+  let time = 0;
   const p = {
-    basePos:     opts.position ?? [0,0,0],
+    basePos: opts.position ?? [0,0,0],
+    // Animation parameters exactly matching tes2.html
+    legAngleMultiplier: 2,      // time * 2 for leg animation
+    legAngleAmplitude: 0.15,    // Math.sin(time * 2) * 0.15
+    orbitSpeed: 0.4,            // time * 0.2
+    orbitRadius: 1.0,           // orbit radius
+    pulseMultiplier: 2,         // time * 2 for pulsing
+    pulseAmplitude: 0.05,       // 1.0 + Math.sin(time * 2) * 0.05
+    enableOrbit: true,
+    
+    // Pivots matching tes2.html exactly
+    pivot_FL: [-0.14, -0.05,  0.03],
+    pivot_FR: [ 0.14, -0.05,  0.03],
+    pivot_BL: [-0.14, -0.05, 0.03],
+    pivot_BR: [ 0.14, -0.05, 0.03],
 
-    // idle
-    breatheAmp:  0.05,
-    breatheHz:   1.2,
-    spin:        0.0,
-
-    tailAmp:     0.35,
-    tailHz:      1.2,
-
-    stepAmp:     0.08,
-    stepHz:      0.8,
-
-    headYawAmp:  0.25,
-    headYawHz:   0.5,
-
-    // ---- Backflip params (staged) ----
-    flipDuration: 0.9,   // total durasi
-    flipAxis: 'x',       // 'x' backflip, 'y' spin, 'z' roll
-    jumpHeight: 1.2,     // puncak lompatan (parabola)
-    flipStart:  0.15,    // rotasi mulai setelah naik dulu (15%)
-    flipEnd:    0.85,    // rotasi selesai sebelum landing (85%)
-
-    // ground safety
-    enableGroundSnap: true,
+    // ---- Backflip params ----
+    flipDuration: 0.9,
+    flipAxis: 'x',
+    jumpHeight: 1.0,
+    enableGroundSnap: false,
     groundY: 0.0,
-    groundMargin: 0.02,  // sedikit jarak agar tak “nyentuh”
   };
 
   // state backflip
-  let flipProg = -1; // <0 idle, 0..1 berjalan
-  function flip(axis='x', duration=p.flipDuration, jump=p.jumpHeight){
+  let flipProg = -1;
+ function flip(axis, duration=p.flipDuration, jump=p.jumpHeight){
     if (flipProg < 0) {
-      p.flipAxis    = axis || 'x';
-      p.flipDuration= Math.max(0.2, duration || p.flipDuration);
-      p.jumpHeight  = (jump ?? p.jumpHeight);
-      flipProg = 0;
-    }
-  }
+      if (typeof axis === 'string') {
+          if (axis === 'y') p.flipAxis = [0, 1, 0];
+          else if (axis === 'z') p.flipAxis = [0, 0, 1];
+          else p.flipAxis = [1, 0, 0]; // Default 'x'
+      } else if (Array.isArray(axis) && axis.length === 3) {
+          p.flipAxis = axis; // Gunakan array [x, y, z] secara langsung
+      } else {
+          p.flipAxis = [1, 0, 0]; // Fallback ke 'x'
+      }
+      
+      p.flipDuration = Math.max(0.2, duration || p.flipDuration);
+      p.jumpHeight = (jump ?? p.jumpHeight);
+      flipProg = 0;
+    }
+  }
 
-  // easing helpers
-  const easeInOutCos = (k)=> 0.5 - 0.5*Math.cos(Math.PI*k);
-  const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+  // easing 0..1
+  function easeInOutCos(k){ return 0.5 - 0.5*Math.cos(Math.PI*k); }
 
   function update(dt){
-    t += dt;
+    time += 0.02; // Matching tes2.html increment
 
-    // --- progress flip + staging ---
-    let e = 0;                 // eased 0..1
-    let gaitScale = 1;         // scale idle while flipping
-    let angle = 0;             // final flip angle (rad)
+    // progress flip
+    let flipAngle = 0;
+    let gaitScale = 1;
+    let e = 0;
 
     if (flipProg >= 0) {
       flipProg += dt / Math.max(0.0001, p.flipDuration);
       const k = Math.min(flipProg, 1);
       e = easeInOutCos(k);
-      gaitScale = 1 - e; // idle mengecil menuju puncak
-
-      // rotasi hanya pada window [flipStart..flipEnd]
-      const r0 = p.flipStart, r1 = p.flipEnd;
-      const r = clamp01( (e - r0) / Math.max(0.0001, (r1 - r0)) );
-      const rEase = easeInOutCos(r);
-      angle = rEase * Math.PI*2.0; // 360°
-
+      flipAngle = e * Math.PI * 2.0;
+      gaitScale = 1 - e;
       if (flipProg >= 1) flipProg = -1;
     }
 
-    // --- base idle (napas + spin) ---
-    const bob  = Math.sin(t * 2*Math.PI*p.breatheHz) * p.breatheAmp * gaitScale;
-    let base = mul(T(p.basePos[0], p.basePos[1] + bob, p.basePos[2]), RY(t * p.spin));
+    // --- ANIMATION VALUES (exactly matching tes2.html) ---
+    // 1. Leg movement
+    let legAngle = Math.sin(time * p.legAngleMultiplier) * p.legAngleAmplitude * gaitScale;
+    
+    // 2. Orbital movement  
+    let orbitAngle = time * p.orbitSpeed;
+    let orbitX = 0, orbitZ = 0;
+    if (p.enableOrbit) {
+      orbitX = p.orbitRadius * Math.cos(orbitAngle);
+      orbitZ = p.orbitRadius * Math.sin(orbitAngle);
+    }
+    
+    // 3. Pulsing scale for body (exactly matching tes2.html)
+    let pulse = 1.0 + Math.sin(time * p.pulseMultiplier) * p.pulseAmplitude * gaitScale;
 
-    // --- apply staged backflip ---
-    if (e > 0) {
-      // 1) ROTATE around body pivot (backflip: -angle di X)
-      const Rflip = (()=>{
-        if (p.flipAxis === 'x') return RX(-angle);
-        if (p.flipAxis === 'y') return RY(+angle);
-        if (p.flipAxis === 'z') return RZ(+angle);
-        return RX(-angle);
-      })();
-      base = mul(base, aroundSafe(Rflip, P('body')));
+    // Apply base position offset
+    orbitX += p.basePos[0];
+    orbitZ += p.basePos[2];
 
-      // 2) JUMP ARC (parabola 0→H→0, puncak di tengah)
-      //    formula: y = 4 * H * e * (1-e)  (selalu >= 0 sepanjang flip)
-      const jumpY = 4.0 * (p.jumpHeight || 1.0) * e * (1.0 - e);
-      base = mul(T(0, jumpY, 0), base);
+    // ---- BACKFLIP transform ----
+    let jumpY = 0;
+    if (flipAngle !== 0) {
+      jumpY = Math.sin(e * Math.PI) * (p.jumpHeight || 1.0);
     }
 
-    // --- ground clamp (jaga tidak “nyentuh”) ---
+    // --- Build matrices exactly like tes2.html ---
+    
+    // Body Core (with pulsing)
+    M.body = get_I4();
+    scale(M.body, pulse, pulse, pulse);        // 1. Local scaling
+    rotateY(M.body, -orbitAngle);              // 2. Orbit rotation
+    translate(M.body, orbitX, jumpY, orbitZ);  // 3. Global translation
+
+    // Head (no pulsing)
+    M.head = get_I4();
+    rotateY(M.head, -orbitAngle);              // 2. Orbit rotation
+    translate(M.head, orbitX, jumpY, orbitZ);  // 3. Global translation
+
+    // Tail (no pulsing)  
+    M.tail = get_I4();
+    rotateY(M.tail, -orbitAngle);              // 2. Orbit rotation
+    translate(M.tail, orbitX, jumpY, orbitZ);  // 3. Global translation
+
+    // Legs with pivot transforms (exactly matching tes2.html)
+    
+    // Leg FL (Front Left)
+    M.legFL = get_I4();
+    translate(M.legFL, p.pivot_FL[0], p.pivot_FL[1], p.pivot_FL[2]);
+    rotateX(M.legFL, legAngle);
+    translate(M.legFL, -p.pivot_FL[0], -p.pivot_FL[1], -p.pivot_FL[2]);
+    rotateY(M.legFL, -orbitAngle);
+    translate(M.legFL, orbitX, jumpY, orbitZ);
+
+    // Leg FR (Front Right)
+    M.legFR = get_I4();
+    translate(M.legFR, p.pivot_FR[0], p.pivot_FR[1], p.pivot_FR[2]);
+    rotateX(M.legFR, -legAngle);  // opposite phase
+    translate(M.legFR, -p.pivot_FR[0], -p.pivot_FR[1], -p.pivot_FR[2]);
+    rotateY(M.legFR, -orbitAngle);
+    translate(M.legFR, orbitX, jumpY, orbitZ);
+
+    // Leg BL (Back Left)
+    M.legBL = get_I4();
+    translate(M.legBL, p.pivot_BL[0], p.pivot_BL[1], p.pivot_BL[2]);
+    rotateX(M.legBL, -legAngle);  // opposite phase
+    translate(M.legBL, -p.pivot_BL[0], -p.pivot_BL[1], -p.pivot_BL[2]);
+    rotateY(M.legBL, -orbitAngle);
+    translate(M.legBL, orbitX, jumpY, orbitZ);
+
+    // Leg BR (Back Right)
+    M.legBR = get_I4();
+    translate(M.legBR, p.pivot_BR[0], p.pivot_BR[1], p.pivot_BR[2]);
+    rotateX(M.legBR, legAngle);   // same phase as FL
+    translate(M.legBR, -p.pivot_BR[0], -p.pivot_BR[1], -p.pivot_BR[2]);
+    rotateY(M.legBR, -orbitAngle);
+    translate(M.legBR, orbitX, jumpY, orbitZ);
+
+    // optional snap ke tanah
     if (p.enableGroundSnap) {
-      const minY = p.groundY + (p.groundMargin || 0);
-      const ty = base[13];
-      if (ty < minY) {
-        base = mul(T(0, minY - ty, 0), base);
-      }
+      [M.body, M.head, M.tail, M.legFL, M.legFR, M.legBL, M.legBR].forEach(m => {
+        if (m[13] < p.groundY) {
+          const dy = p.groundY - m[13];
+          translate(m, 0, dy, 0);
+        }
+      });
     }
-
-    // assign
-    M.body   = base;
-    M.static = M.body;
-
-    // --- head & ears ---
-    if (buffers.head) {
-      const yaw = Math.sin(t * 2*Math.PI*p.headYawHz) * p.headYawAmp * gaitScale;
-      M.head = mul(M.body, aroundSafe(RY(yaw), P('head')));
-    }
-    if (buffers.earL) M.earL = mul(buffers.head ? M.head : M.body, aroundSafe(RX(0), P('earL')));
-    if (buffers.earR) M.earR = mul(buffers.head ? M.head : M.body, aroundSafe(RX(0), P('earR')));
-
-    // --- tail ---
-    if (buffers.tail) {
-      const wag = Math.sin(t * 2*Math.PI*p.tailHz) * p.tailAmp * gaitScale;
-      M.tail = mul(M.body, aroundSafe(RY(wag), P('tail')));
-    }
-
-    // --- legs ---
-    const step = Math.sin(t * 2*Math.PI*p.stepHz) * p.stepAmp * gaitScale;
-    const opp  = -step;
-
-    if (buffers.legFL) M.legFL = mul(M.body, aroundSafe(RX( step), P('legFL')));
-    if (buffers.legFR) M.legFR = mul(M.body, aroundSafe(RX( opp ), P('legFR')));
-    if (buffers.legBL) M.legBL = mul(M.body, aroundSafe(RX( opp ), P('legBL')));
-    if (buffers.legBR) M.legBR = mul(M.body, aroundSafe(RX( step), P('legBR')));
-
-    // --- feet (opsional) ---
-    if (buffers.footFL) M.footFL = mul(M.legFL, aroundSafe(RX(-step*0.5), P('footFL')));
-    if (buffers.footFR) M.footFR = mul(M.legFR, aroundSafe(RX(-opp *0.5), P('footFR')));
-    if (buffers.footBL) M.footBL = mul(M.legBL, aroundSafe(RX(-opp *0.5), P('footBL')));
-    if (buffers.footBR) M.footBR = mul(M.legBR, aroundSafe(RX(-step*0.5), P('footBR')));
-
-    // --- claws ikut foot/leg ---
-    if (buffers.clawsFL) M.clawsFL = buffers.footFL ? M.footFL : M.legFL;
-    if (buffers.clawsFR) M.clawsFR = buffers.footFR ? M.footFR : M.legFR;
-    if (buffers.clawsBL) M.clawsBL = buffers.footBL ? M.footBL : M.legBL;
-    if (buffers.clawsBR) M.clawsBR = buffers.footBR ? M.footBR : M.legBR;
   }
 
-  // expose API
-  return { buffers, M, update, params: p, flip };
+  // orbital controls
+  function setOrbit(enabled = true, radius = 1.0, speed = 0.2) {
+    p.enableOrbit = enabled;
+    p.orbitRadius = radius;
+    p.orbitSpeed = speed;
+  }
+
+  // expose API & params
+  return { buffers, M, update, params: p, flip, setOrbit };
 }

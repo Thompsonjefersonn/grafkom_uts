@@ -6,6 +6,7 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
 
   // -------- mini mat4 --------
   const I = () => new Float32Array([1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1]);
+  const D = a => a * Math.PI / 180; // helper konversi derajat → radian
   const mul = (A,B) => {
     const m = new Float32Array(16);
     for (let r=0; r<4; r++) for (let c=0; c<4; c++)
@@ -41,7 +42,8 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
 
   // matriks per-part
   const M = {
-    body:I(), head:I(), earL:I(), earR:I(), tail:I(),
+    body:I(), head:I(), earL:I(), earR:I(), tail1:I(),
+    tail2:I(), 
     legFL:I(), legFR:I(), legBL:I(), legBR:I(),
     footFL:I(), footFR:I(), footBL:I(), footBR:I(),
     clawsFL:I(), clawsFR:I(), clawsBL:I(), clawsBR:I(),
@@ -68,13 +70,25 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
 
     // ===== Head =====
     headYawHz:     0.6,
-    headYawAmp:    0.22,
+    headYawAmp:    0.10,
+
+      // Head roll (subtle)
+    headRollHz: 0.06,
+    headRollAmp: 0.05, // rad
+
+
+    
 
     // ===== Tail (Arbitrary-axis wag) =====
-    tailHz:        1.2,
-    tailAmp:       0.32,
-    tailAxis:      [0,1,1],
-    useArbTail:    true,
+tailHz:        0.1,
+tailAmp:       0.1,
+tailAxis:      [0,1,1],
+useArbTail:    true,
+
+// 2-segmen
+tailSegPhase:  0.5,   // delay fase dari pangkal ke ujung (rad ~ 0.5 ~ 30°)
+tailSegGain:   1.15,  // ujung sedikit lebih besar agar terlihat lentur
+tailLeapDamp:  0.30,  // wag jadi lebih kalem saat leap
 
     // ===== Legs/feet =====
     stepHz:        0.9,
@@ -120,6 +134,11 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
     }
   }
   const flip = () => leap(); // alias agar HTML lama yang pakai flip() tetap berfungsi
+
+
+
+
+
 
   function update(dt){
     t += dt;
@@ -195,24 +214,41 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
     M.body   = base;
     M.static = M.body;
 
-    // Head & ears
-    if (buffers.head) {
-      const hyIdle = Math.sin(t * 2*Math.PI * p.headYawHz) * p.headYawAmp * (inLeap ? 0.2*gaitScale : 1);
-      M.head = mul(M.body, aroundSafe(RY(hyIdle), P('head')));
-    }
+if (buffers.head) {
+  const hyIdle = Math.sin(t*2*Math.PI*p.headYawHz) * p.headYawAmp * (inLeap ? 0.2*gaitScale : 1);
+  const hRoll  = Math.sin(t*2*Math.PI*p.headRollHz) * p.headRollAmp * (inLeap ? 0.3*gaitScale : 1);
+  let H = mul(M.body, aroundSafe(RY(hyIdle), P('head')));
+  H = mul(H, aroundSafe(RZ(hRoll), P('head')));
+  M.head = H;
+}
+
     if (buffers.earL) M.earL = mul(buffers.head ? M.head : M.body, aroundSafe(RX(0), P('earL')));
     if (buffers.earR) M.earR = mul(buffers.head ? M.head : M.body, aroundSafe(RX(0), P('earR')));
 
-    // Tail (wag + counter in leap)
-    if (buffers.tail) {
-      const wag = Math.sin(t * 2*Math.PI * p.tailHz) * p.tailAmp * (inLeap ? 0.3*gaitScale : 1);
-      const Rt = p.useArbTail
-        ? RAxis(p.tailAxis?.[0] ?? 0, p.tailAxis?.[1] ?? 1, p.tailAxis?.[2] ?? 0, wag)
-        : RY(wag);
-      let tailM = mul(M.body, aroundSafe(Rt, P('tail')));
-      if (inLeap) tailM = mul(tailM, aroundSafe(RX(p.tailCounter), P('tail')));
-      M.tail = tailM;
-    }
+// ===== Tail (connect tail2 to tail1) =====
+const wag = Math.sin(t * 2*Math.PI * p.tailHz) * p.tailAmp * (inLeap ? 0.3*gaitScale : 1);
+
+// pangkal (tail1) yaw kiri–kanan
+if (buffers.tail1) {
+  let T1 = mul(M.body, aroundSafe(RY(wag), P('tail1')));
+  if (inLeap) T1 = mul(T1, aroundSafe(RX(p.tailCounter), P('tail1'))); // opsional counter
+  M.tail1 = T1;
+
+  // ujung (tail2) langsung ikut tail1 1:1
+  if (buffers.tail2) {
+    M.tail2 = M.tail1;
+  }
+} else if (buffers.tail) {
+  // fallback: 1 mesh
+  const Rt = p.useArbTail
+    ? RAxis(p.tailAxis?.[0] ?? 0, p.tailAxis?.[1] ?? 1, p.tailAxis?.[2] ?? 0, wag)
+    : RY(wag);
+  let tailM = mul(M.body, aroundSafe(Rt, P('tail')));
+  if (inLeap) tailM = mul(tailM, aroundSafe(RX(p.tailCounter), P('tail')));
+  M.tail = tailM;
+}
+
+
 
     // ===== Legs =====
     const step = Math.sin(t * 2*Math.PI * p.stepHz) * p.stepAmp * (inLeap ? 0.2*gaitScale : 1);
@@ -226,6 +262,7 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
       if (buffers.legFR) M.legFR = M.body;
       if (buffers.legBL) M.legBL = M.body;
       if (buffers.legBR) M.legBR = M.body;
+      if (buffers.tail)  M.tail  = M.body;
     } else {
       // --- Normal swing/pose ---
       if (buffers.legFL) M.legFL = mul(M.body, aroundSafe(RX(step + leapFront), P('legFL')));
@@ -245,6 +282,8 @@ export function createLuxio(gl, createMesh, meshes, opts = {}) {
     if (buffers.footFR) M.footFR = mul(footFRParent, aroundSafe(RX(-opp *fc), P('footFR')));
     if (buffers.footBL) M.footBL = mul(footBLParent, aroundSafe(RX(-opp *fc), P('footBL')));
     if (buffers.footBR) M.footBR = mul(footBRParent, aroundSafe(RX(-step*fc), P('footBR')));
+
+    
 
     // Claws follow
     if (buffers.clawsFL) M.clawsFL = buffers.footFL ? M.footFL : (buffers.legFL ? M.legFL : M.body);

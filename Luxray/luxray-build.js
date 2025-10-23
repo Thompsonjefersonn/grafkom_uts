@@ -1,5 +1,5 @@
 export function buildLuxrayMeshes() {
-    console.log("Building Luxio...");
+    console.log("Building Luxray...");
 function generateSphere(r, stacks, slices, tx=0, ty=0, tz=0, col=[1,0.6,0.6]){
   var vertices=[], faces=[];
   for(let i=0;i<=stacks;i++){
@@ -1991,7 +1991,7 @@ return{
   legFrontL, legFrontR, uplegFrontL, uplegFrontR,
   coneLegBackL1, coneLegBackL2, coneLegBackL3, coneLegBackR1, coneLegBackR2, coneLegBackR3,
   ring1, ring2, ring3, ring4, ring5, ring6, ring7, ring8, nose, noseFur, smile,
-  tail, star, ...claws1, ...claws2, ...claws3, ...claws4, ...padsFrontL , ...padsFrontR , ...padsBackL , ...padsBackR ,
+  tail, star, claws1, claws2, claws3, claws4, padsFrontL , padsFrontR , padsBackL , padsBackR ,
   earLeft, earRight, cone1, cone2, cone3, cone4, cone5, 
   frontConeL1, frontConeL2, frontConeL3, frontConeR1, frontConeR2, frontConeR3,
   triLeft, triRight, innerEarLeft, innerEarRight,

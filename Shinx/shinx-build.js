@@ -1,3 +1,7 @@
+// shinx-build.js - Complete mesh generation for Shinx character
+export function buildShinxMeshes() {
+  console.log("Building Shinx...");
+  
 function generateSphere(r, stacks, slices, tx=0, ty=0, tz=0, col=[1,0.6,0.6]){
   var vertices=[], faces=[];
   for(let i=0;i<=stacks;i++){
@@ -680,16 +684,16 @@ var sphere=generateSphere(0.37,10,10,0,0.27,0.4, [0.2, 0.8, 1.0]); // kepala
 
   // kaki dilebarkan posisinya di sumbu X
     // kaki lebih besar dan panjang ke atas
-var leg1 = generateCylinder(0.09, 0.4, 10, -0.14, -0.6, 0.23, [0.2, 0.8, 1.0]);
-var leg2 = generateCylinder(0.09, 0.4, 10,  0.14, -0.6, 0.23, [0.2, 0.8, 1.0]);
+var leg1 = generateCylinder(0.09, 0.4, 10, -0.14, -0.6, 0.2, [0.2, 0.8, 1.0]);
+var leg2 = generateCylinder(0.09, 0.4, 10,  0.14, -0.6, 0.2, [0.2, 0.8, 1.0]);
 // kaki belakang hitam
 var leg3 = generateCylinder(0.09, 0.4, 10, -0.14, -0.6, -0.23, [0,0,0]);
 var leg4 = generateCylinder(0.09, 0.4, 10,  0.14, -0.6, -0.23, [0,0,0]);
 
 
   // telapak pipih untuk tiap kaki
-var foot1 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20, -0.14, -0.6, 0.26, [0.2, 0.8, 1.0]);
-var foot2 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20,  0.14, -0.6, 0.26, [0.2, 0.8, 1.0]);
+var foot1 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20, -0.14, -0.6, 0.22, [0.2, 0.8, 1.0]);
+var foot2 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20,  0.14, -0.6, 0.22, [0.2, 0.8, 1.0]);
 var foot3 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20, -0.14, -0.6, -0.2, [0,0,0]);
 var foot4 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20,  0.14, -0.6, -0.2, [0,0,0]);
 
@@ -711,8 +715,8 @@ rotateZ(earLeft, 23 * Math.PI/180); // rotasi sumbu
 var earRight = generateEllipsoid(0.2, 0.3, 0.08, 20, 20, 0.25, 0.55, 0.4, [0.2, 0.8, 1.0]);
 rotateZ(earRight, 337 * Math.PI/180);
 
-var ring1 = makeHorizontalRing(-0.14, -0.5, 0.23, 0.095, 0.05, 20, [1,1,0]);
-var ring2 = makeHorizontalRing( 0.14, -0.5, 0.23, 0.095, 0.05, 20, [1,1,0]);
+var ring1 = makeHorizontalRing(-0.14, -0.5, 0.2, 0.095, 0.05, 20, [1,1,0]);
+var ring2 = makeHorizontalRing( 0.14, -0.5, 0.2, 0.095, 0.05, 20, [1,1,0]);
 
   // cone di bawah sphere, agak miring ke depan
 var cone = generateCone(0.18, 0.3, 20, 0, 0.017, 0.4, [0,0,0]);
@@ -782,7 +786,7 @@ var smile = generateSmile3D(
     20,         // slices: Kehalusan kurva
     0,          // tx: Posisi X
     0.1,        // ty: Posisi Y
-    0.68,       // tz: Posisi Z
+    0.69,       // tz: Posisi Z
     [0, 0, 0] // color
 );
 
@@ -790,9 +794,9 @@ var smile = generateSmile3D(
 var topCone1 = makeConeAdjustable(0,0.68,0.5, 0.12, 0.35, 20, 40*Math.PI/180, [0.2, 0.8, 1.0]);
 var topCone2 = makeConeAdjustable(0,0.6,0.55, 0.12, 0.3, 20, 60*Math.PI/180, [0.2, 0.8, 1.0]);
 
-let claws1 = clawsAt(-0.14, -0.59, 0.36, [0.6, 0.6, 0.6]); 
+let claws1 = clawsAt(-0.14, -0.59, 0.33, [0.6, 0.6, 0.6]); 
 let claws3 = clawsAt(-0.14, -0.59, -0.09, [0.6, 0.6, 0.6]);
-let claws4 = clawsAt(0.14, -0.59, 0.36, [0.6, 0.6, 0.6]);
+let claws4 = clawsAt(0.14, -0.59, 0.33, [0.6, 0.6, 0.6]);
 let claws5 = clawsAt(0.14, -0.59, -0.09, [0.6, 0.6, 0.6]);
 
 // ===== Bintang di depan telinga =====
@@ -816,14 +820,18 @@ var starRight = generateAsymmetricStar(
 
 
   return {
-    sphere, cone,
-  body,
-  leg1, leg2, leg3, leg4,
-  foot1, foot2, foot3, foot4,
-  ring1, ring2, nose, smile,
-  tail, star, ...claws1,  ...claws4, ...claws5 ,    ...claws3,  
-  earLeft, earRight, cone1, cone2, cone3, cone4, cone5, 
-  sideConeTop1, sideConeBottom1, sideConeBottom2, sideConeTop2, 
-  triLeft, triRight, topCone1, topCone2, starLeft, starRight , eyeLeft , eyeRight
-
-  }
+    sphere, cone, body,
+    leg1, leg2, leg3, leg4,
+    foot1, foot2, foot3, foot4,
+    ring1, ring2, nose, smile,
+    tail, star, 
+    claws1: claws1[0], claws2: claws1[1], claws3: claws1[2],
+    claws4: claws4[0], claws5: claws4[1], claws6: claws4[2],
+    claws7: claws5[0], claws8: claws5[1], claws9: claws5[2],
+    claws10: claws3[0], claws11: claws3[1], claws12: claws3[2],
+    earLeft, earRight, cone1, cone2, cone3, cone4, cone5, 
+    sideConeTop1, sideConeBottom1, sideConeBottom2, sideConeTop2, 
+    triLeft, triRight, topCone1, topCone2, starLeft, starRight, 
+    eyeLeft, eyeRight
+  };
+}
