@@ -1,4 +1,3 @@
-// shinx-build.js - Complete mesh generation for Shinx character
 export function buildShinxMeshes() {
   console.log("Building Shinx...");
   
@@ -674,56 +673,44 @@ function mergeMeshes(meshes){
   return {vertices,faces};
 }
 
-var sphere=generateSphere(0.37,10,10,0,0.27,0.4, [0.2, 0.8, 1.0]); // kepala
+var sphere=generateSphere(0.37,10,10,0,0.27,0.4, [0.2, 0.8, 1.0]);
 
-  // body dinaikkan biar lebih nempel ke sphere
-    // body dinaikkan + ujung agak gepeng (radiusZ lebih kecil)
   var body = generateEllipsoidFlatColor(0.3,0.2,0.4,30,30,0,-0.2,0);
 
 
 
-  // kaki dilebarkan posisinya di sumbu X
-    // kaki lebih besar dan panjang ke atas
 var leg1 = generateCylinder(0.09, 0.4, 10, -0.14, -0.6, 0.2, [0.2, 0.8, 1.0]);
 var leg2 = generateCylinder(0.09, 0.4, 10,  0.14, -0.6, 0.2, [0.2, 0.8, 1.0]);
-// kaki belakang hitam
 var leg3 = generateCylinder(0.09, 0.4, 10, -0.14, -0.6, -0.23, [0,0,0]);
 var leg4 = generateCylinder(0.09, 0.4, 10,  0.14, -0.6, -0.23, [0,0,0]);
 
 
-  // telapak pipih untuk tiap kaki
 var foot1 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20, -0.14, -0.6, 0.22, [0.2, 0.8, 1.0]);
 var foot2 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20,  0.14, -0.6, 0.22, [0.2, 0.8, 1.0]);
 var foot3 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20, -0.14, -0.6, -0.2, [0,0,0]);
 var foot4 = generateFlatEllipsoid(0.09, 0.05, 0.09, 20, 20,  0.14, -0.6, -0.2, [0,0,0]);
 
 
-  // ekor pakai silinder tipis
-// ekor horizontal ke belakang
 var tail=generateCylinderZ(0.03,0.8,20, 0,-0.2,-1,[0,0,0]);
 
 
   var star = generateStar4_3D(0.25, 0.05, 0, -0.2, -1, [1,0.85,0.1]);
 
-  // telinga kiri (kecil, elipsoid)
-// telinga kiri (elipsoid biasa)
 var earLeft = generateEllipsoid(0.2, 0.3, 0.08, 20, 20, -0.26, 0.55, 0.4, [0.2, 0.8, 1.0]);
-rotateZ(earLeft, 23 * Math.PI/180); // rotasi sumbu 
+rotateZ(earLeft, 23 * Math.PI/180);
 
 
-// telinga kanan (elipsoid biasa)
 var earRight = generateEllipsoid(0.2, 0.3, 0.08, 20, 20, 0.25, 0.55, 0.4, [0.2, 0.8, 1.0]);
 rotateZ(earRight, 337 * Math.PI/180);
 
 var ring1 = makeHorizontalRing(-0.14, -0.5, 0.2, 0.095, 0.05, 20, [1,1,0]);
 var ring2 = makeHorizontalRing( 0.14, -0.5, 0.2, 0.095, 0.05, 20, [1,1,0]);
 
-  // cone di bawah sphere, agak miring ke depan
 var cone = generateCone(0.18, 0.3, 20, 0, 0.017, 0.4, [0,0,0]);
 
 let angle = 23 * Math.PI/180;
 for (let i=0; i<cone.vertices.length; i+=6){
-  let y = cone.vertices[i+1] - 0.3; // geser pivot ke sphere bawah
+  let y = cone.vertices[i+1] - 0.3;
   let z = cone.vertices[i+2] - 0.4;
   let y2 = y*Math.cos(angle) - z*Math.sin(angle);
   let z2 = y*Math.sin(angle) + z*Math.cos(angle);
@@ -731,66 +718,55 @@ for (let i=0; i<cone.vertices.length; i+=6){
   cone.vertices[i+2] = z2 + 0.4;
 }
 
-// ===== cone kecil di belakang body =====
 var cone1 = makeCone(0, -0.08, -0.39, 310*Math.PI/180, 0);
 
-// cone kanan miring ke samping 40° (positif = kanan)
 var cone2 = makeCone(-0.1, -0.15, -0.39, 290*Math.PI/180, 40*Math.PI/180);
 
-// cone kiri miring ke samping -40° (negatif = kiri)
 var cone3 = makeCone(0.1, -0.15, -0.39, 290*Math.PI/180, -40*Math.PI/180);
 
 var cone4 = makeCone(0.08, -0.25, -0.39, 250*Math.PI/180, -50*Math.PI/180);
 
 var cone5 = makeCone(-0.08, -0.25, -0.39, 250*Math.PI/180, 50*Math.PI/180);
 
-// cone atas menghadap samping kanan
 var sideConeTop1 = makeSideCone(0.4, 0.2, 0, 0.05, 0.2, 16, 180*Math.PI/180, 90*Math.PI/180, [0.2, 0.8, 1.0]);
 
-// cone atas di samping sphere, tilt ke atas 30° (positif)
 var sideConeTop1 = makeSideConeFlexible(0.3, 0.08, 0.4, 0.1, 0.2, 16, 180*Math.PI/180, 50*Math.PI/180, [0.2, 0.8, 1.0]);
 
-// cone bawah di samping sphere, tilt ke bawah 30° (negatif)
 var sideConeBottom1 = makeSideConeFlexible(0.25, 0.03, 0.4, 0.1, 0.2, 16, 180*Math.PI/180, 45*Math.PI/180, [0.2, 0.8, 1.0]);
 
 var sideConeTop2 = makeSideConeFlexible(-0.3, 0.08, 0.4, 0.1, 0.2, 16, -180*Math.PI/180, -50*Math.PI/180, [0.2, 0.8, 1.0]);
 
-// cone bawah di samping sphere, tilt ke bawah 30° (negatif)
 var sideConeBottom2 = makeSideConeFlexible(-0.25, 0.03, 0.4, 0.1, 0.2, 16, -180*Math.PI/180, -45*Math.PI/180, [0.2, 0.8, 1.0]);
 
 
 var triLeft = makeFlatTriangle(-0.1, -0.18, 0.378, 0.08, 0.1, 210*Math.PI/180, 165*Math.PI/180, [0,0,0]);
 
-// segitiga kanan
 var triRight = makeFlatTriangle(0.1, -0.18, 0.378, 0.08, 0.1, 150*Math.PI/180, 165*Math.PI/180, [0,0,0]);
 
-// ===== elipsoid kecil untuk hidung =====
 var nose = generateEllipsoid(
-    0.045,  // rx: lebar hidung
-    0.02,  // ry: tinggi hidung
-    0.02,  // rz: kedalaman/tebal hidung
-    20,    // stacks
-    20,    // slices
-    0,     // tx: pos X (di tengah)
-    0.2,  // ty: pos Y (di depan sphere)
-    0.775,   // tz: pos Z (sedikit di depan sphere)
-    [1, 0, 0] // warna pink/hidung
+    0.045,
+    0.02,
+    0.02,
+    20,
+    20,
+    0,
+    0.2,
+    0.775,
+    [1, 0, 0]
 );
 
-// Ganti panggilan fungsi `smile` Anda dengan yang ini
 var smile = generateSmile3D(
-    0.3,       // width: Lebar senyuman
-   -0.05,       // curveHeight: Lengkungan ke bawah
-    0.02,       // verticalThickness: Ketebalan NAIK-TURUN
-    0.03,       // horizontalThickness: Ketebalan MAJU-MUNDUR
-    20,         // slices: Kehalusan kurva
-    0,          // tx: Posisi X
-    0.1,        // ty: Posisi Y
-    0.69,       // tz: Posisi Z
-    [0, 0, 0] // color
+    0.3,
+   -0.05,
+    0.02,
+    0.03,
+    20,
+    0,
+    0.1,
+    0.69,
+    [0, 0, 0]
 );
 
-// ===== 2 cone di atas sphere, miring ke depan 20° =====
 var topCone1 = makeConeAdjustable(0,0.68,0.5, 0.12, 0.35, 20, 40*Math.PI/180, [0.2, 0.8, 1.0]);
 var topCone2 = makeConeAdjustable(0,0.6,0.55, 0.12, 0.3, 20, 60*Math.PI/180, [0.2, 0.8, 1.0]);
 
@@ -799,22 +775,21 @@ let claws3 = clawsAt(-0.14, -0.59, -0.09, [0.6, 0.6, 0.6]);
 let claws4 = clawsAt(0.14, -0.59, 0.33, [0.6, 0.6, 0.6]);
 let claws5 = clawsAt(0.14, -0.59, -0.09, [0.6, 0.6, 0.6]);
 
-// ===== Bintang di depan telinga =====
 var starLeft = generateAsymmetricStar(
-    0.12,               // size: Ukuran titik samping & bawah
-    0.22,               // topPointLength: Titik atas lebih panjang
-    0.01,               // thickness: Ketebalan
-    0.44, 0.35, 0.4799,  // tx, ty, tz: Posisi di depan telinga kiri
-    -20 * Math.PI/180,  // tiltAngle: Miring ke kiri 20 derajat
-    [1, 0.85, 0.1]      // color
+    0.12,
+    0.22,
+    0.01,
+    0.44, 0.35, 0.4799,
+    -20 * Math.PI/180,
+    [1, 0.85, 0.1]
 );
 
 var starRight = generateAsymmetricStar(
-    0.12,               // size: Ukuran titik samping & bawah
-    0.22,               // topPointLength: Titik atas lebih panjang
-    0.01,               // thickness: Ketebalan
-    -0.44, 0.35, 0.4799,   // tx, ty, tz: Posisi di depan telinga kanan
-    20 * Math.PI/180,   // tiltAngle: Miring ke kanan 20 derajat
+    0.12,
+    0.22,
+    0.01,
+    -0.44, 0.35, 0.4799,
+    20 * Math.PI/180,
     [1, 0.85, 0.1]      
 );
 

@@ -146,7 +146,6 @@ export function buildLuxrayParts(createMesh){
   if (parts.legFR) pivots.legFR = boundsOf(parts.legFR).max;
   if (parts.legBL) pivots.legBL = boundsOf(parts.legBL).max;
   if (parts.legBR) pivots.legBR = boundsOf(parts.legBR).max;
-  if (parts.tail)  pivots.tail  = boundsOf(parts.tail).center;
 
   return { buffers, pivots };
 }
