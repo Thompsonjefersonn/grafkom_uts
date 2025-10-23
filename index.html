@@ -14,7 +14,7 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
-<div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · H: roll Shinx</div>
+<div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · G: roll Shinx</div>
 
 
 <script type="module">
@@ -23,7 +23,6 @@ import { createLuxray } from './Luxray/luxray-anim.js';
 import { createShinx }  from './Shinx/shinx-anim.js';
 
 
-/* ---------- WebGL setup ---------- */
 const canvas = document.getElementById('gl');
 const gl = canvas.getContext('webgl', { antialias:true });
 if(!gl){ alert('WebGL tidak tersedia'); throw new Error('No WebGL'); }
@@ -101,7 +100,6 @@ function drawMesh(buffers, model, wireframe=false){
 }
 
 
-/* ---------- env ---------- */
 function makeFlatPlane(size=200, y=0, color=[0.55,0.85,0.45]){
   const x0=-size, x1=size, z0=-size, z1=size;
   const verts = new Float32Array([
@@ -141,7 +139,6 @@ function makeGrassField(area=40, count=900){
 
   function makeBox(w=0.2, h=1.2, d=0.2, color=[0.45,0.28,0.12]) {
     const x=w*0.5, y=h*0.5, z=d*0.5, c=color;
-    // 8 verts, 6 faces (each face has its own 4 verts for flat colors)
     const V = [];
     const I = [];
     function face(ax,ay,az, bx,by,bz, cx,cy,cz, dx,dy,dz){
@@ -154,7 +151,6 @@ function makeGrassField(area=40, count=900){
       );
       I.push(base,base+1,base+2, base,base+2,base+3);
     }
-    // +X, -X, +Y, -Y, +Z, -Z
     face( x,-y,-z, x,-y, z, x, y, z, x, y,-z);
     face(-x,-y, z,-x,-y,-z,-x, y,-z,-x, y, z);
     face(-x, y,-z, x, y,-z, x, y, z,-x, y, z);
@@ -166,22 +162,17 @@ function makeGrassField(area=40, count=900){
 
     function makeCone(radius=0.9, height=1.6, seg=20, color=[0.18,0.5,0.22]) {
     const V=[], I=[];
-    // tip
     V.push(0,height,0, color[0],color[1],color[2]);
-    // base center
     V.push(0,0,0,     color[0],color[1],color[2]);
-    // ring
     for (let i=0;i<=seg;i++){
       const a = (i/seg)*Math.PI*2;
       const x = Math.cos(a)*radius;
       const z = Math.sin(a)*radius;
       V.push(x,0,z, color[0],color[1],color[2]);
     }
-    // side triangles (tip -> ring i -> ring i+1)
     for (let i=0;i<seg;i++){
       I.push(0, 2+i, 2+i+1);
     }
-    // base (fan from center)
     for (let i=0;i<seg;i++){
       I.push(1, 2+i+1, 2+i);
     }
@@ -201,29 +192,24 @@ function makeGrassField(area=40, count=900){
     [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
   ];
 
-  // normalize helper
   const norm = (v)=>{ const l=Math.hypot(v[0],v[1],v[2]); return [v[0]/l,v[1]/l,v[2]/l]; };
   const len  = (v)=> Math.hypot(v[0],v[1],v[2]);
 
-  // 1) vertex dasar di-unit-kan
   const unit = base.map(norm);
 
-  // 2) beri jitter SEKALI per-vertex → edge ketemu rapat
   const radial = unit.map(()=> radius * (1 + (Math.random()*2-1)*jitter));
   let P = unit.map((u,i)=> [u[0]*radial[i], u[1]*radial[i], u[2]*radial[i]]);
   let F = faces0.map(f=> f.slice());
 
-  // 3) opsional subdivisi biar lebih halus (edge-split)
   function subdivide(P,F,levels){
     for(let lv=0; lv<levels; lv++){
-      const cache = new Map();   // "a_b" -> idx midpoint
+      const cache = new Map();
       const nextF = [];
       function mid(a,b){
         const key = a<b ? a+"_"+b : b+"_"+a;
         if(cache.has(key)) return cache.get(key);
         const ua = norm(P[a]), ub = norm(P[b]);
         const dir = norm([ua[0]+ub[0], ua[1]+ub[1], ua[2]+ub[2]]);
-        // panjang midpoint: rata-rata panjang endpoint + sedikit noise kecil
         const L = (len(P[a]) + len(P[b]))*0.5 * (1 + (Math.random()*2-1)*jitter*0.15);
         const m = [dir[0]*L, dir[1]*L, dir[2]*L];
         const id = P.push(m) - 1;
@@ -243,7 +229,6 @@ function makeGrassField(area=40, count=900){
     P = r.P; F = r.F;
   }
 
-  // 4) build mesh: posisi pakai P (rapat), warna flat per-face
   const verts = [], idx = [];
   let vi = 0;
   for(const tri of F){
@@ -260,15 +245,12 @@ function makeGrassField(area=40, count=900){
 }
 
 function makeCloudMesh() {
-  // Kita panggil makeBigRock, tapi dengan subdivisi lebih tinggi (2)
-  // dan jitter lebih rendah (0.15) agar lebih bulat dan "puffy",
-  // tidak terlalu spiky "seperti batu".
-  return makeBigRock(
-    1.0,            // radius dasar
-    0.15,          // jitter (sedikit saja agar tidak kotak)
-    [0.95, 0.95, 1.0], // warna putih-kebiruan
-    2               // subdivisi (lebih halus)
-  );
+  return makeBigRock(
+    1.0,
+     0.15,
+    [0.95, 0.95, 1.0],
+     2
+  );
 }
 
 function makeRouteGrassPatchRect(x0, z0, x1, z1, tile=1.0, perTile=10) {
@@ -306,7 +288,6 @@ function makeRouteGrassPatchRect(x0, z0, x1, z1, tile=1.0, perTile=10) {
 
 
 
-/* ---------- tiny mat4 & camera ---------- */
 const I = ()=>new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 function mul(A,B){
   const m=new Float32Array(16);
@@ -339,10 +320,9 @@ function lookAt(eye, center, up=[0,1,0]){
 }
 
 
-// FPS cam
-let camPos   = [0, 2.0, 8.0];     // posisi awal oke di +Z
-let camYaw   = Math.PI;           // <— awalnya 0.0, ganti 180° biar lihat ke -Z (ke belakang)
-let camPitch = -0.15;             // tetap sedikit menunduk
+let camPos   = [0, 2.0, 8.0];
+let camYaw   = Math.PI;
+let camPitch = -0.15;
 function getForward(){const cy=Math.cos(camYaw),sy=Math.sin(camYaw),cp=Math.cos(camPitch),sp=Math.sin(camPitch);return [sy*cp,sp,cy*cp];}
 function getRight(){const f=getForward(), up=[0,1,0]; const rx=f[1]*up[2]-f[2]*up[1], ry=f[2]*up[0]-f[0]*up[2], rz=f[0]*up[1]-f[1]*up[0]; const l=Math.hypot(rx,ry,rz); return [rx/l,ry/l,rz/l];}
 function getView(){const f=getForward();return lookAt(camPos,[camPos[0]+f[0],camPos[1]+f[1],camPos[2]+f[2]]);}
@@ -376,58 +356,50 @@ gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0.75,0.91,1.00,1);
 
 
-/* ---------- init 3 model ---------- */
-// POSISI: Luxio kiri (-x), Shinx tengah, Luxray kanan (+x)
   const Luxio  = createLuxio (gl, createMesh,  undefined, { position: [0,0,0] });
   const Shinx  = createShinx (gl, createMesh,  undefined, { position: [-7, 0, 0] });
   const Luxray = createLuxray(gl, createMesh, undefined, { position: [3, 0, 0] });
 
 
 
-// Jika signature Luxray masih (gl, createMesh, meshes, opts):
-// const Luxray = createLuxray(gl, createMesh, undefined, { position: [5,0,0] });
 
 
 window.addEventListener('keydown', (e)=>{
   const k=e.key.toLowerCase();
   if (k==='f') Luxio.flip?.('x');
-  if (k==='g') Luxray.flip?.('x');
-  if (k==='h') Shinx.flip?.('x');
+  if (k==='g') Shinx.flip?.('x');
 });
 Luxio.params.enableGroundSnap = true;
 Luxio.params.groundY = 0.0;
 
-/* ---------- env meshes ---------- */
   const groundPlane = makeFlatPlane(200, 0.0, [0.55,0.85,0.45]);
   const grassField  = makeGrassField(40, 900);
-  const trunk = makeBox(0.3,1.5,0.3, [0.45,0.28,0.12]);         // brownish
-  const leaves1a = makeCone(0.9, 1.0, 18, [0.18,0.50,0.22]);         // dark green
-  const leaves1b = makeCone(0.7, 0.9, 18, [0.20,0.60,0.26]);         // lighter green
+  const trunk = makeBox(0.3,1.5,0.3, [0.45,0.28,0.12]);
+  const leaves1a = makeCone(0.9, 1.0, 18, [0.18,0.50,0.22]);
+  const leaves1b = makeCone(0.7, 0.9, 18, [0.20,0.60,0.26]);
   const leaves1c = makeCone(0.5, 0.7, 18, [0.22,0.70,0.30]);
 
-  const rockMesh = makeBigRock(1.0, 0.25, [0.40,0.39,0.38]); // satu mesh reusable
-  const cloudMesh = makeCloudMesh(); // GANTI: Panggil fungsi baru
+  const rockMesh = makeBigRock(1.0, 0.25, [0.40,0.39,0.38]);
+  const cloudMesh = makeCloudMesh();
 const rocks = [
-  { x:-13.5, z:  3.6, scale: 0.5, rotY: 0.3 },
-  { x:2, z:  3.5, scale: 0.5, rotY: 0.3 },
+  { x:-13.5, z:  3.6, scale: 0.5, rotY: 0.3 },
+  { x:2, z:  3.5, scale: 0.5, rotY: 0.3 },
 
 ];
 
 const clouds = [
-  // 5 awan asli (y sudah diturunkan sedikit)
-  { x: -25, y: 5.2, z: -15, scale: 3.5, speed: 0.8 },
-  { x: -10, y: 5.5, z: -25, scale: 4.0, speed: 1.0 },
-  { x:   5, y: 5.45, z: -10, scale: 3.0, speed: 0.6 },
-  { x:  20, y: 5.3, z: -20, scale: 3.8, speed: 0.9 },
-  { x:  35, y: 5.12, z: -12, scale: 3.2, speed: 0.7 },
+  { x: -25, y: 5.2, z: -15, scale: 3.5, speed: 0.8 },
+  { x: -10, y: 5.5, z: -25, scale: 4.0, speed: 1.0 },
+  { x: 5, y: 5.45, z: -10, scale: 3.0, speed: 0.6 },
+  { x: 20, y: 5.3, z: -20, scale: 3.8, speed: 0.9 },
+  { x: 35, y: 5.12, z: -12, scale: 3.2, speed: 0.7 },
 
-  // BARU: 4 awan tambahan
-  { x: -15, y: 5.4, z: -5,  scale: 3.0, speed: 0.7 }, // Agak ke depan
-  { x:   0, y: 5.23, z: -22, scale: 3.6, speed: 0.9 }, // Agak ke belakang
-  { x:  15, y: 5.1, z: -8,  scale: 3.3, speed: 0.5 }, // Agak ke depan
-  { x: -30, y: 5, z: -20, scale: 3.7, speed: 1.1 }, // Jauh kiri
+  { x: -15, y: 5.4, z: -5,  scale: 3.0, speed: 0.7 },
+  { x: 0, y: 5.23, z: -22, scale: 3.6, speed: 0.9 },
+  { x: 15, y: 5.1, z: -8,  scale: 3.3, speed: 0.5 },
+  { x: -30, y: 5, z: -20, scale: 3.7, speed: 1.1 },
 ];
-const CLOUD_WRAP = 50.0; // Area awan akan berputar (wrap)
+const CLOUD_WRAP = 50.0;
 
 const trees = [
   { x: 8,  z: 5  },
@@ -457,21 +429,19 @@ const trees = [
 ];
 
 const routeGrass = makeRouteGrassPatchRect(
-  -9,  // x0 (kiri)
-  -11, // z0 (bawah)
-  7,   // x1 (kanan)
-  6,   // z1 (atas)
-  1.1, // ukuran tile grid (kecil = lebih rapi/rapat)
-  9    // rumpun per tile (besar = lebih padat)
+  -9,
+  -11,
+  7,
+  6,
+  1.1,
+  9
 );
 
-// kalau mau beberapa segmen tetap:
-const routeGrass2 = makeRouteGrassPatchRect(-6, 6, 6, 10, 1.0, 8); // contoh segmen kedua
+const routeGrass2 = makeRouteGrassPatchRect(-6, 6, 6, 10, 1.0, 8);
 
 
-/* ---------- loop ---------- */
 let last=0;
-const MODEL_Y = 1.0;              // angkat semua part dari tanah
+const MODEL_Y = 1.0;
 const baseOffset = T(0, MODEL_Y, 0);
 
 
@@ -501,9 +471,9 @@ function tick(ms){
   gl.uniformMatrix4fv(loc.uView,false,view);
 
   for(const c of clouds){
-    c.x += c.speed * dt;
-    if(c.x > CLOUD_WRAP) c.x = -CLOUD_WRAP; // Wrap (muncul lagi dari kiri)
-  }
+    c.x += c.speed * dt;
+    if(c.x > CLOUD_WRAP) c.x = -CLOUD_WRAP;
+  }
 
 
   gl.uniformMatrix4fv(loc.uModel,false,I());
@@ -516,12 +486,10 @@ function tick(ms){
   drawMesh(rockMesh, modelRock, false);
 }
 
-// BARU: Draw Awan
-  for (const c of clouds){
-    // GANTI: Skala diubah agar lebih memanjang horizontal (X) dan gepeng (Y)
-    const modelCloud = mul( T(c.x, c.y, c.z), S(c.scale * 1.5, c.scale * 0.7, c.scale) );
-    drawMesh(cloudMesh, modelCloud, false);
-  }
+  for (const c of clouds){
+    const modelCloud = mul( T(c.x, c.y, c.z), S(c.scale * 1.5, c.scale * 0.7, c.scale) );
+    drawMesh(cloudMesh, modelCloud, false);
+  }
 
 
   Luxio.update(dt);
@@ -538,7 +506,6 @@ function tick(ms){
 
 
 
-// --- draw LUXRAY dulu ---
 let B = Luxray.buffers, M = Luxray.M;
 if (B.body)  D(B.body,  M.body);
 if (B.head)  D(B.head,  M.head);
@@ -576,7 +543,6 @@ if (B.legBR) D(B.legBR, M.legBR);
 
 
 
-// --- draw SHINX (tengah) ---
 B = Shinx.buffers; M = Shinx.M;
 if (B.body)  D(B.body,  M.body);
 if (B.head)  D(B.head,  M.head);
@@ -587,7 +553,6 @@ if (B.legBL) D(B.legBL, M.legBL);
 if (B.legBR) D(B.legBR, M.legBR);
 
 
-// --- lalu LUXIO ---
 B = Luxio.buffers; M = Luxio.M;
 if (B.body)  D(B.body,  M.body);
 if (B.head)  D(B.head,  M.head);
@@ -597,18 +562,17 @@ if (B.legFL) D(B.legFL, M.legFL);
 if (B.legFR) D(B.legFR, M.legFR);
 if (B.legBL) D(B.legBL, M.legBL);
 if (B.legBR) D(B.legBR, M.legBR);
+if(B.tail) D(B.tail , M.tail)
 if (B.static)D(B.static,M.static);
 
+
 for (const {x,z} of trees) {
-    // --- trunk ---
-    const H_TRUNK = 1.5;         // your trunk height
-    const trunkModel = T(x, H_TRUNK * 0.5, z); // half height lift
+    const H_TRUNK = 1.5;
+    const trunkModel = T(x, H_TRUNK * 0.5, z);
 
-    // --- leaves stack (no sway, fixed & solid) ---
-    const baseY = H_TRUNK; // exactly top of trunk
+    const baseY = H_TRUNK;
 
-    // position each cone manually until it looks right (like you were doing)
-    const leavesA = T(x, baseY - 0.20, z);  // slightly overlapping into trunk
+    const leavesA = T(x, baseY - 0.20, z);
     const leavesB = T(x, baseY + 0.30, z);
     const leavesC = T(x, baseY + 0.80, z);
 

@@ -1,4 +1,3 @@
-// luxray-anim.js
 import { buildLuxrayParts } from './luxray-parts.js';
 
 
@@ -6,7 +5,6 @@ export function createLuxray(gl, createMesh, meshes, opts = {}) {
   const { buffers, pivots } = buildLuxrayParts(createMesh, meshes);
 
 
-  // --- util matriks (I, mul, T sama gaya sebelumnya) ---
   const I = () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
   const mul = (A,B) => {
     const m = new Float32Array(16);
@@ -26,7 +24,7 @@ export function createLuxray(gl, createMesh, meshes, opts = {}) {
   const m=I(); m[0]=c; m[2]=s; m[8]=-s; m[10]=c;
   return m;
 };
-const RZ = a => { // Opsional, tapi baik untuk dimiliki
+const RZ = a => {
     const c=Math.cos(a), s=Math.sin(a);
     const m=I(); m[0]=c; m[1]=s; m[4]=-s; m[5]=c;
     return m;
@@ -43,8 +41,8 @@ const RZ = a => { // Opsional, tapi baik untuk dimiliki
     let len = Math.sqrt(x*x + y*y + z*z);
 
 
-    if (len < 0.00001) { // hindari divide-by-zero
-      return m; // kembalikan matriks identitas
+    if (len < 0.00001) {
+      return m;
     }
    
     len = 1.0 / len;
@@ -55,38 +53,32 @@ const RZ = a => { // Opsional, tapi baik untuk dimiliki
 
     const c = Math.cos(a);
     const s = Math.sin(a);
-    const t = 1.0 - c; // (one minus cosine)
+    const t = 1.0 - c;
 
 
     const tx = t * x, ty = t * y;
 
 
-    // Set matriks (Column-major order, sesuai gaya Anda)
     m[0] = c + tx*x;
     m[1] = s*z + tx*y;
     m[2] = -s*y + tx*z;
-    // m[3] = 0;
 
 
     m[4] = -s*z + tx*y;
     m[5] = c + ty*y;
     m[6] = s*x + ty*z;
-    // m[7] = 0;
 
 
     m[8] = s*y + tx*z;
     m[9] = -s*x + ty*z;
     m[10] = c + t*z*z;
-    // m[11] = 0;
 
 
-    // m[12..15] sudah benar (0,0,0,1) dari I()
    
     return m;
   };
 
 
-  // scale lokal: sama seperti shinx-anim.js (kolom 0..2 dikali, kolom 3/translate nggak ikut)
 const scaleLocal = (m, sx, sy, sz) => {
   m[0]*=sx; m[1]*=sx; m[2]*=sx; m[3]*=sx;
   m[4]*=sy; m[5]*=sy; m[6]*=sy; m[7]*=sy;
@@ -96,7 +88,6 @@ const scaleLocal = (m, sx, sy, sz) => {
 
 
 
-  // rotateY in-place (like shinx-anim.js rotateY)
   const rotateY = (m, ang) => {
     const c = Math.cos(ang), s = Math.sin(ang);
     const mv0 = m[0], mv4 = m[4], mv8 = m[8], mv12 = m[12];
@@ -124,7 +115,6 @@ const scaleLocal = (m, sx, sy, sz) => {
   let t=0;
 
 
-  // params (bisa di-override lewat opts)
   const p = {
     basePos: opts.position ?? [0,0,0],
     jumpPeriod: 2.5,
@@ -133,47 +123,40 @@ const scaleLocal = (m, sx, sy, sz) => {
     legBend: 0.6,
 
 
-    // approach
     startBehind: opts.startBehind ?? 4.0,
     approachDuration: opts.approachDuration ?? 4.0,
     approachStepAmp: 0.2,
     tailWagDuringApproach: true,
 
 
-    // gait
     approachLegFreq: 1.8,
     approachLegAmp: 0.08,
-    pulseFreq: opts.pulseFreq ?? 1,   // Hz (berapa napas per detik)
+    pulseFreq: opts.pulseFreq ?? 1,
 pulseAmp:  opts.pulseAmp  ?? 0.05,
-returnStartBoost: opts.returnStartBoost ?? 1.6, // x baseAmp di awal balik
+returnStartBoost: opts.returnStartBoost ?? 1.6,
 returnEndScale:   opts.returnEndScale   ?? 0.6,
 
 
-    // returning/turn params
     turnRadius: opts.turnRadius ?? 1.2,
-    turnDuration: 3.6,        // Durasi Arc 1
-    returnArcDuration: 3.6,   // <<< BARU: Durasi Arc 2
-    returnDuration: 5.0,     // Durasi jalan lurus mundur
-    finalTurnDuration: 1    // <<< Saya kecilkan durasi putar di tempat
+    turnDuration: 3.6,
+    returnArcDuration: 3.6,
+    returnDuration: 5.0,
+    finalTurnDuration: 1
   };
 
 
-  // posisi awal (di belakang target pada sumbu Z)
   const startPos = [ p.basePos[0], p.basePos[1], p.basePos[2] - p.startBehind ];
 
 
-  // state
   let inApproach = true;
   let approachTimer = 0;
 
 
-  // jump counting
   let jumpCount = 0;
   let prevJumpCycle = -1;
   let jumpPhaseStartT = 0;
 
 
-  // returning state
   let returning = false;
   let returnTimer = 0;
   let returnArcTimer = 0;
@@ -184,12 +167,9 @@ returnEndScale:   opts.returnEndScale   ?? 0.6,
 
 
   function applyPulse() {
-  // persis gaya shinx: 1.0 + sin(ωt) * amp
   const pulse = 1.0 + Math.sin(t * 2*Math.PI * p.pulseFreq) * p.pulseAmp;
 
 
-  // OPSIONAL: kalau kamu butuh M.static TIDAK ikut membesar,
-  // set M.static = M.body.slice() tepat sebelum panggil applyPulse() di tiap fase.
   scaleLocal(M.body, pulse, pulse, pulse);
 }
 
@@ -198,9 +178,6 @@ returnEndScale:   opts.returnEndScale   ?? 0.6,
     t += dt;
 
 
-    // -------------------------
-    // 1) APPROACH PHASE (maju sekali)
-    // -------------------------
     if (inApproach && !returning) {
       approachTimer += dt;
       const u = Math.min(1, approachTimer / p.approachDuration);
@@ -215,11 +192,9 @@ returnEndScale:   opts.returnEndScale   ?? 0.6,
       const bob = Math.sin(t * 2*Math.PI * 1.2) * 0.03 * (1 - u);
 
 
-      // set body
       M.body = T(curX, curY + bob, curZ);
 
 
-      // --- APPROACH: legs (phase-explicit, kecil amplitude) ---
       const freq = p.approachLegFreq;
       const amp  = p.approachLegAmp;
       const uAmp = amp * (1 - 0.6 * u);
@@ -243,18 +218,15 @@ returnEndScale:   opts.returnEndScale   ?? 0.6,
       if (buffers.legBR) M.legBR = mul(M.body, around(RX(brA * 0.45), P('legBR')));
 
 
-      // head & tail
       if (buffers.head) M.head = mul(M.body, T(0, 0.05 - 0.08 * (1-u), 0.05));
       if (p.tailWagDuringApproach && buffers.tail) {
         const wag = Math.sin(t * 2*Math.PI * 2.0) * 0.18 * (1 - 0.5 * u);
         M.tail = mul(M.body, T(0, -0.05, -0.55));
-        // renderer may rotate tail by pivot if needed
       }
 
 
             if (u >= 1) {
         inApproach = false;
-        // Mulai fase loncat: set titik nol waktu & reset counter
         jumpPhaseStartT = t;
         jumpCount = 0;
         prevJumpCycle = -1;
@@ -266,18 +238,11 @@ returnEndScale:   opts.returnEndScale   ?? 0.6,
     }
 
 
-    // -------------------------
-    // RETURNING (Arc -> Straight Back -> Strafe -> Final Turn)
-    // -------------------------
     if (returning) {
-      // Titik akhir putaran arc
       const turnEndPos = [ p.basePos[0] + 2 * p.turnRadius, p.basePos[1], p.basePos[2] ];
-      // Titik akhir setelah jalan lurus MUNDUR
-      // (Posisi X masih di [X+2R], tapi Z sudah di [Z_start])
       const backEndPos = [ turnEndPos[0], startPos[1], startPos[2] ];
 
 
-      // 1) FASE PUTARAN (ARC / SETENGAH LINGKARAN)
       if (turnTimer < p.turnDuration) {
         turnTimer += dt;
         const k = Math.min(1, turnTimer / p.turnDuration);
@@ -300,7 +265,6 @@ let yawStartFinal = 0;
    
 
 
-        // --- Kaki (Gait saat berputar) ---
         const freqR = p.approachLegFreq;
         const ampR  = p.approachLegAmp;
         const phaseR = t * 2*Math.PI * freqR;
@@ -321,10 +285,8 @@ applyPulse();
         return;
       }
      
-      // 2) FASE JALAN LURUS MUNDUR (Dari turnEndPos -> backEndPos)
-      // <<< INI FASE "JALAN LURUS" ANDA >>>
       if (returnTimer < p.returnDuration) {
-        currentYaw = Math.PI; // Pastikan yaw tetap 180
+        currentYaw = Math.PI;
 
 
         returnTimer += dt;
@@ -332,8 +294,7 @@ applyPulse();
         const re = ru*ru*(3 - 2*ru);
 
 
-        // Interpolasi HANYA Z. X tetap di turnEndPos[0]
-        const rx = turnEndPos[0]; // X tetap
+        const rx = turnEndPos[0];
         const ry = turnEndPos[1];
         const rz = turnEndPos[2] + (backEndPos[2] - turnEndPos[2]) * re;
 
@@ -346,10 +307,9 @@ applyPulse();
    
 
 
-        // --- Kaki (Gait saat jalan lurus - dibuat seperti approach) ---
 const freqR  = p.approachLegFreq;
   const ampR   = p.approachLegAmp;
-  const uAmpR  = ampR * (1 - 0.6 * ru);          // sama persis seperti approach (pakai ru)
+  const uAmpR  = ampR * (1 - 0.6 * ru);
   const phaseR = t * 2*Math.PI * freqR;
 
 
@@ -357,7 +317,7 @@ const freqR  = p.approachLegFreq;
   const phaseOppR = Math.sin(phaseR + Math.PI) * uAmpR;
 
 
-  const maxLegAngleR = 0.15;                     // sama seperti approach
+  const maxLegAngleR = 0.15;
   const clamp = (x)=> Math.max(-maxLegAngleR, Math.min(maxLegAngleR, x));
 
 
@@ -378,27 +338,22 @@ applyPulse();
       }
 
 
-      // 3) FASE PUTARAN 2 (ARC MUNDUR) — MIRROR DARI ARC 1, ROTASI KE KIRI
 if (returnArcTimer < p.returnArcDuration) {
   returnArcTimer += dt;
   const k = Math.min(1, returnArcTimer / p.returnArcDuration);
   const e = k*k*(3 - 2*k);
 
 
-  // Sudut mirror: berjalan dari PI -> 0 (posisinya konsisten dengan start di samping)
   const theta = Math.PI * (1.0 - e);
 
 
-  // Rotasi KE KIRI: yaw negatif dari sudut yang sama (mirror dari Arc 1)
   currentYaw = -theta;
 
 
-  // Pusat lingkaran kedua di sekitar startPos (mirror dari Arc 1)
   const centerX = startPos[0] + p.turnRadius;
   const centerZ = startPos[2];
 
 
-  // Lintasan mirror: cos sama, sin dibalik tanda biar arah putarnya kebalikan
   const curX = centerX - p.turnRadius * Math.cos(theta);
   const curY = startPos[1];
   const curZ = centerZ - p.turnRadius * Math.sin(theta);
@@ -411,7 +366,6 @@ if (returnArcTimer < p.returnArcDuration) {
   M.body[14] = curZ;
 
 
-  // Gait SAMA seperti Arc 1 (freq/amp/clamp identik)
   const freqR = p.approachLegFreq;
   const ampR  = p.approachLegAmp;
   const phaseR = t * 2*Math.PI * freqR;
@@ -437,17 +391,13 @@ if (returnArcTimer < p.returnArcDuration) {
   applyPulse();
 
 
-  // kalau kamu masih skip fase final turn, lanjutkan logic kamu setelah ini
-  // (mis. set finalTurnTimer = p.finalTurnDuration saat k==1)
   if (k < 1) return;
-// langsung mulai final turn di frame berikutnya
 finalTurnTimer = 0;
-yawStartFinal = currentYaw;   // simpan yaw saat selesai arc2
+yawStartFinal = currentYaw;
 return;
 }
 
 
-      // 4) FASE PUTAR BALIK DI STARTPOS (180 -> 0)
       if (finalTurnTimer < p.finalTurnDuration) {
         finalTurnTimer += dt;
         const k = Math.min(1, finalTurnTimer / p.finalTurnDuration);
@@ -463,7 +413,6 @@ return;
    
 
 
-        // ... (Kaki jiggle) ...
         const turnLegA = Math.sin(t * 6.0) * 0.04;
   if (buffers.legFL) M.legFL = mul(M.body, around(RX(turnLegA), P('legFL')));
         if (buffers.legFR) M.legFR = mul(M.body, around(RX(-turnLegA), P('legFR')));
@@ -476,12 +425,10 @@ applyPulse();
       }
 
 
-            // 5) RESET CYCLE
       inApproach = true;
       approachTimer = 0;
 
 
-      // biar fase loncat berikutnya mulai fresh (akan di-set lagi saat approach selesai)
       jumpCount = 0;
       prevJumpCycle = -1;
 
@@ -498,15 +445,11 @@ applyPulse();
     }
 
 
-    // -------------------------
-    // 2) JUMP LOOP (tetap di basePos)
-    // -------------------------
         const jumpTime = t - jumpPhaseStartT;
     const cycle = 3.0;
     const tc = jumpTime % cycle;
 
 
-    // detect finished cycles to count jumps
     const curJumpCycle = Math.floor(jumpTime / cycle);
     if (curJumpCycle !== prevJumpCycle) {
       if (prevJumpCycle >= 0) {
@@ -526,7 +469,6 @@ applyPulse();
     }
 
 
-    // ======= Fase loncat (mirip original) =======
     let jumpY = 0;
     let crouch = 0;
     let legShift = 0;
@@ -551,47 +493,31 @@ applyPulse();
     }
 
 
-    // ======= BADAN =======
     const bodyY = p.basePos[1] + jumpY;
     M.body = T(p.basePos[0], bodyY, p.basePos[2])
 
 
-    // ======= KEPALA =======
-    // ======= KEPALA (DENGAN ARBITRARY ROTATION) =======
 
 
-    // 1. Tentukan Sumbu Rotasi Arbitrary
-    // Kita akan miringkan kepala secara diagonal,
-    // di antara sumbu Y (atas) dan sumbu X (kanan).
     const axisX = 1.0;
     const axisY = 1.0;
     const axisZ = 0.0;
    
-    // 2. Tentukan Sudut Rotasi (Animasi)
-    // Buat animasi "wobble" atau "head tilt" menggunakan sinus
-    const wobbleAngle = Math.sin(t * 2 * Math.PI * 2.0) * 0.025; // Goyang 2x/detik
+    const wobbleAngle = Math.sin(t * 2 * Math.PI * 2.0) * 0.025;
 
 
-    // 3. Buat Matriks Rotasi Arbitrary
     const wobbleMatrix = R_axis(wobbleAngle, axisX, axisY, axisZ);
 
 
-    // 4. Dapatkan offset (posisi) kepala seperti sebelumnya
     const headOffset = T(0, 0.05 - crouch * 0.1, 0.05);
 
 
-    // 5. Gabungkan:
-    // M.body = Transformasi badan
-    // headOffset = Pindahkan ke posisi leher
-    // wobbleMatrix = Terapkan rotasi "wobble" lokal pada kepala
     M.head = mul(M.body, mul(headOffset, wobbleMatrix));
 
 
-    // ======= EKOR =======
     M.tail = mul(M.body, T(0, -0.05, -0.55));
 
 
-    // ======= KAKI (tetap non-rotational here; jumping uses translation shift) =======
     const legY = 0.05 + crouch * -0.1;
     const legFrontZ = 0;
     const legBackZ = 0;

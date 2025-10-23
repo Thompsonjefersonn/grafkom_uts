@@ -1,9 +1,5 @@
-// luxray-parts.js (Full Extended Version)
-// Disinkronkan otomatis dengan luxray-build.js
-// Mengelompokkan setiap mesh ke bagian logis (head/body/ear/legs)
 import { buildLuxrayMeshes } from './luxray-build.js';
 
-// ---- util ----
 function mergeMeshes(meshes) {
   let vertices = [], faces = [], offset = 0;
   for (let m of meshes) {
@@ -45,16 +41,13 @@ function meshToBuffers(createMesh, m){
   return createMesh(verts, faces);
 }
 
-// ---- main builder ----
 export function buildLuxrayParts(createMesh){
   const meshes = buildLuxrayMeshes();
 
-  // Gabungan tail + star ke body
   const tailCombined = mergeList(
     meshes.tail, meshes.star
   );
 
-  // BODY (+ pindahan dari "static")
   const bodyCombined = mergeList(
     meshes.body, meshes.chest, meshes.neckBase,
     meshes.backFur, meshes.sideFurL, meshes.sideFurR,
@@ -62,7 +55,6 @@ export function buildLuxrayParts(createMesh){
     meshes.frontConeL1, meshes.frontConeL2, meshes.frontConeL3,
     meshes.frontConeR1, meshes.frontConeR2, meshes.frontConeR3,
 
-    // --- moved from former static ---
     meshes.cover2,
     meshes.selimut2, meshes.selimut3, meshes.selimut4,
     meshes.cone, meshes.cone1, meshes.cone2, meshes.cone3, meshes.cone4, meshes.cone5,
@@ -72,7 +64,6 @@ export function buildLuxrayParts(createMesh){
   const nose    = meshes.nose    ?? meshes.noseMain ?? null;
   const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
 
-  // Kepala (semua elemen kepala & wajah)
   const headCombined = mergeList(
     meshes.head, meshes.headMain, meshes.face, meshes.jaw, meshes.snout,
     meshes.headFur1, meshes.headFur2, meshes.headFur3, meshes.headFur4, meshes.headFur5,
@@ -84,7 +75,6 @@ export function buildLuxrayParts(createMesh){
     meshes.irisL, meshes.irisR, meshes.ringL, meshes.ringR
   );
 
-  // Telinga
   const earL = mergeList(
     meshes.earLeft, meshes.earLeft1, meshes.innerEarLeft, meshes.earFurLeft
   );
@@ -92,7 +82,6 @@ export function buildLuxrayParts(createMesh){
     meshes.earRight, meshes.earRight1, meshes.innerEarRight, meshes.earFurRight
   );
 
-  // Kaki depan kiri (+ uplegFrontL)
   const legFL = mergeList(
     meshes.leg1, meshes.legFrontL, meshes.foot1, meshes.claws1,
     meshes.ring1, meshes.ring3, meshes.ring5, meshes.ring7,
@@ -101,7 +90,6 @@ export function buildLuxrayParts(createMesh){
     meshes.coneLegBackL1, meshes.coneLegBackL2, meshes.coneLegBackL3,
     meshes.uplegFrontL
   );
-  // Kaki depan kanan (+ uplegFrontR)
   const legFR = mergeList(
     meshes.leg2, meshes.legFrontR, meshes.foot2, meshes.claws3,
     meshes.ring2, meshes.ring4, meshes.ring6, meshes.ring8,
@@ -110,18 +98,15 @@ export function buildLuxrayParts(createMesh){
     meshes.coneLegBackR1, meshes.coneLegBackR2, meshes.coneLegBackR3,
     meshes.uplegFrontR
   );
-  // Kaki belakang kiri
   const legBL = mergeList(
     meshes.leg3, meshes.foot3, meshes.padsBackL, meshes.sole3,
     meshes.thighMuscle3, meshes.thighMuscleBack3, meshes.claws2
   );
-  // Kaki belakang kanan
   const legBR = mergeList(
     meshes.leg4, meshes.foot4, meshes.claws4, meshes.padsBackR, meshes.sole4,
     meshes.thighMuscle4, meshes.thighMuscleBack4
   );
 
-  // ---- Grouped Parts ----
   const parts = {
     body: bodyCombined,
     head: headCombined,
@@ -130,14 +115,11 @@ export function buildLuxrayParts(createMesh){
     tail: tailCombined,
   };
 
-  // convert mesh → GPU buffer
   const buffers = {};
   for (const [k,m] of Object.entries(parts))
     if (m) buffers[k] = meshToBuffers(createMesh, m);
 
-  // (staticList & buffers.static dihapus)
 
-  // ---- pivot per bagian ----
   const pivots = {};
   if (parts.head)  pivots.head  = boundsOf(parts.head).center;
   if (parts.earL)  pivots.earL  = boundsOf(parts.earL).center;
