@@ -88,9 +88,9 @@ const RZ = a => { // Opsional, tapi baik untuk dimiliki
 
   // scale lokal: sama seperti shinx-anim.js (kolom 0..2 dikali, kolom 3/translate nggak ikut)
 const scaleLocal = (m, sx, sy, sz) => {
-  m[0]=sx; m[1]=sx; m[2]=sx; m[3]=sx;
-  m[4]=sy; m[5]=sy; m[6]=sy; m[7]=sy;
-  m[8]=sz; m[9]=sz; m[10]=sz; m[11]=sz;
+  m[0]*=sx; m[1]*=sx; m[2]*=sx; m[3]*=sx;
+  m[4]*=sy; m[5]*=sy; m[6]*=sy; m[7]*=sy;
+  m[8]*=sz; m[9]*=sz; m[10]*=sz; m[11]*=sz;
 };
 
 
@@ -610,5 +610,5 @@ applyPulse();
   }
 
 
-  return { buffers, M, update, params:p };
+  return { buffers, M, update, params:p };
 }

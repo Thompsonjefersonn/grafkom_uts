@@ -1,14 +1,9 @@
-// shinx-parts.js
-// Mengubah hasil build menjadi daftar "parts" + util merge/draw + reset mekanisme.
-// Pastikan shinx-build.js mengekspor: export function buildShinxMeshes(){ return {...} }
 
 import { buildShinxMeshes } from './shinx-build.js';
 
-// ---------- helpers ----------
 function cloneArray(a){ return new Float32Array(a); }
 function toFloat32(arr){ return (arr instanceof Float32Array) ? arr : new Float32Array(arr); }
 
-// hitung pivot default: rata-rata posisi vertex (x,y,z)
 function computePivot(vertices){
   let n = vertices.length/6;
   let sx=0, sy=0, sz=0;
@@ -20,7 +15,6 @@ function computePivot(vertices){
   return [sx/n, sy/n, sz/n];
 }
 
-// ---- util ----
 function mergeMeshes(meshes) {
   let vertices = [], faces = [], offset = 0;
   for (let m of meshes) {
@@ -63,28 +57,22 @@ function meshToBuffers(createMesh, m){
   return createMesh(m.vertices, m.faces);
 }
 
-// ---- main builder ----
 export function buildShinxParts(createMesh){
   const meshes = buildShinxMeshes();
 
-  // group parts exactly matching tes2.html
-  // Part 1: Head (Tidak berdenyut)
   const headMeshes = [
     meshes.sphere, meshes.earLeft, meshes.earRight, meshes.topCone1, meshes.topCone2, 
     meshes.nose, meshes.smile, meshes.starLeft, meshes.starRight, meshes.eyeLeft, meshes.eyeRight, 
     meshes.sideConeTop1, meshes.sideConeTop2, meshes.sideConeBottom1, meshes.sideConeBottom2
   ];
   
-  // Part 2: Tail (Tidak berdenyut)
   const tailMeshes = [
     meshes.tail, meshes.star, meshes.cone1, meshes.cone2, 
     meshes.cone3, meshes.cone4, meshes.cone5
   ];
 
-  // Part 3: Body Core (Berdenyut)
   const bodyMeshes = [meshes.body, meshes.cone, meshes.triLeft, meshes.triRight];
   
-  // Part 4: Kaki-kaki (Tidak berubah)
   const legFLMeshes = [
     meshes.leg1, meshes.foot1, meshes.ring1,
     meshes.claws1, meshes.claws2, meshes.claws3
@@ -102,7 +90,6 @@ export function buildShinxParts(createMesh){
     meshes.claws7, meshes.claws8, meshes.claws9
   ];
 
-  // merge and create buffers
   const parts = {
     head:    mergeList(...headMeshes),
     body:    mergeList(...bodyMeshes), 
@@ -113,7 +100,6 @@ export function buildShinxParts(createMesh){
     legBR:   mergeList(...legBRMeshes)
   };
 
-  // create buffers and pivots
   const buffers = {};
   const pivots = {};
   
