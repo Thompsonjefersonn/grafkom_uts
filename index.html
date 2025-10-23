@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Luxio & Luxray — Advanced Anim</title>
+  <title>Shinx, Luxio & Luxray — Advanced Anim</title>
   <style>
     html,body,canvas{margin:0;height:100%;width:100%;display:block;background:#bfe7ff}
     #hint{
@@ -14,7 +14,7 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
-<div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · G: flip Luxray · H: flip Shinx</div>
+<div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · H: roll Shinx</div>
 
 
 <script type="module">
@@ -259,6 +259,18 @@ function makeGrassField(area=40, count=900){
   return createMesh(new Float32Array(verts), new Uint16Array(idx));
 }
 
+function makeCloudMesh() {
+  // Kita panggil makeBigRock, tapi dengan subdivisi lebih tinggi (2)
+  // dan jitter lebih rendah (0.15) agar lebih bulat dan "puffy",
+  // tidak terlalu spiky "seperti batu".
+  return makeBigRock(
+    1.0,            // radius dasar
+    0.15,          // jitter (sedikit saja agar tidak kotak)
+    [0.95, 0.95, 1.0], // warna putih-kebiruan
+    2               // subdivisi (lebih halus)
+  );
+}
+
 function makeRouteGrassPatchRect(x0, z0, x1, z1, tile=1.0, perTile=10) {
   const verts=[], idx=[];
   function addQuad(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, c){
@@ -385,7 +397,6 @@ window.addEventListener('keydown', (e)=>{
 Luxio.params.enableGroundSnap = true;
 Luxio.params.groundY = 0.0;
 
-
 /* ---------- env meshes ---------- */
   const groundPlane = makeFlatPlane(200, 0.0, [0.55,0.85,0.45]);
   const grassField  = makeGrassField(40, 900);
@@ -395,11 +406,28 @@ Luxio.params.groundY = 0.0;
   const leaves1c = makeCone(0.5, 0.7, 18, [0.22,0.70,0.30]);
 
   const rockMesh = makeBigRock(1.0, 0.25, [0.40,0.39,0.38]); // satu mesh reusable
+  const cloudMesh = makeCloudMesh(); // GANTI: Panggil fungsi baru
 const rocks = [
-  { x:-13.5, z:  3.6, scale: 0.5, rotY: 0.3 },
-  { x:2, z:  3.5, scale: 0.5, rotY: 0.3 },
+  { x:-13.5, z:  3.6, scale: 0.5, rotY: 0.3 },
+  { x:2, z:  3.5, scale: 0.5, rotY: 0.3 },
 
 ];
+
+const clouds = [
+  // 5 awan asli (y sudah diturunkan sedikit)
+  { x: -25, y: 5.2, z: -15, scale: 3.5, speed: 0.8 },
+  { x: -10, y: 5.5, z: -25, scale: 4.0, speed: 1.0 },
+  { x:   5, y: 5.45, z: -10, scale: 3.0, speed: 0.6 },
+  { x:  20, y: 5.3, z: -20, scale: 3.8, speed: 0.9 },
+  { x:  35, y: 5.12, z: -12, scale: 3.2, speed: 0.7 },
+
+  // BARU: 4 awan tambahan
+  { x: -15, y: 5.4, z: -5,  scale: 3.0, speed: 0.7 }, // Agak ke depan
+  { x:   0, y: 5.23, z: -22, scale: 3.6, speed: 0.9 }, // Agak ke belakang
+  { x:  15, y: 5.1, z: -8,  scale: 3.3, speed: 0.5 }, // Agak ke depan
+  { x: -30, y: 5, z: -20, scale: 3.7, speed: 1.1 }, // Jauh kiri
+];
+const CLOUD_WRAP = 50.0; // Area awan akan berputar (wrap)
 
 const trees = [
   { x: 8,  z: 5  },
@@ -472,6 +500,11 @@ function tick(ms){
   gl.uniformMatrix4fv(loc.uProj,false,proj);
   gl.uniformMatrix4fv(loc.uView,false,view);
 
+  for(const c of clouds){
+    c.x += c.speed * dt;
+    if(c.x > CLOUD_WRAP) c.x = -CLOUD_WRAP; // Wrap (muncul lagi dari kiri)
+  }
+
 
   gl.uniformMatrix4fv(loc.uModel,false,I());
   drawMesh(groundPlane,I(),false);
@@ -482,6 +515,13 @@ function tick(ms){
   const modelRock = mul( T(r.x, 0.6*r.scale, r.z), mul( RY(r.rotY||0), S(r.scale, r.scale, r.scale) ) );
   drawMesh(rockMesh, modelRock, false);
 }
+
+// BARU: Draw Awan
+  for (const c of clouds){
+    // GANTI: Skala diubah agar lebih memanjang horizontal (X) dan gepeng (Y)
+    const modelCloud = mul( T(c.x, c.y, c.z), S(c.scale * 1.5, c.scale * 0.7, c.scale) );
+    drawMesh(cloudMesh, modelCloud, false);
+  }
 
 
   Luxio.update(dt);
