@@ -20,10 +20,54 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
     m[0]=c*m[0]+s*m[2]; m[4]=c*m[4]+s*m[6]; m[8]=c*m[8]+s*m[10]; m[12]=c*m[12]+s*m[14];
     m[2]=c*m[2]-s*mv0; m[6]=c*m[6]-s*mv4; m[10]=c*m[10]-s*mv8; m[14]=c*m[14]-s*mv12;
   };
+  // *** BARU: Menambahkan rotateZ ***
+  const rotateZ = (m,ang)=> {
+    let c=Math.cos(ang), s=Math.sin(ang);
+    let mv0=m[0], mv4=m[4], mv8=m[8], mv12=m[12];
+    m[0]=c*m[0]-s*m[1]; m[4]=c*m[4]-s*m[5]; m[8]=c*m[8]-s*m[9]; m[12]=c*m[12]-s*m[13];
+    m[1]=c*m[1]+s*mv0; m[5]=c*m[5]+s*mv4; m[9]=c*m[9]+s*mv8; m[13]=c*m[13]+s*mv12;
+  };
   const scale = (m, sx, sy, sz) => {
     m[0]*=sx; m[1]*=sx; m[2]*=sx; m[3]*=sx;
     m[4]*=sy; m[5]*=sy; m[6]*=sy; m[7]*=sy;
     m[8]*=sz; m[9]*=sz; m[10]*=sz; m[11]*=sz;
+  };
+
+  // *** BARU: Fungsi rotasi sumbu arbitrer ***
+  /**
+   * Melakukan post-multiply rotasi ke matriks m
+   * @param {number[]} m - Matriks 4x4 (Array 16)
+   * @param {number} ang - Sudut rotasi (radians)
+   * @param {number} x - Komponen x dari sumbu rotasi
+   * @param {number} y - Komponen y dari sumbu rotasi
+   * @param {number} z - Komponen z dari sumbu rotasi
+   */
+  const rotateAxis = (m, ang, x, y, z) => {
+      let len = Math.sqrt(x*x + y*y + z*z);
+      if (len < 0.00001) { return; } // Hindari pembagian dengan nol
+      len = 1.0 / len;
+      x *= len; y *= len; z *= len;
+
+      const s = Math.sin(ang);
+      const c = Math.cos(ang);
+      const t = 1 - c;
+
+      // Komponen matriks rotasi (column-major)
+      const r00 = c + x*x*t;   const r10 = x*y*t - z*s; const r20 = x*z*t + y*s;
+      const r01 = y*x*t + z*s; const r11 = c + y*y*t;   const r21 = y*z*t - x*s;
+      const r02 = z*x*t - y*s; const r12 = z*y*t + x*s; const r22 = c + z*z*t;
+
+      // Lakukan post-multiplication (M' = M * R) secara in-place
+      for (let i = 0; i < 4; i++) { // Iterasi setiap kolom
+          const col = i * 4;
+          const m0 = m[col + 0]; // m[0][i]
+          const m1 = m[col + 1]; // m[1][i]
+          const m2 = m[col + 2]; // m[2][i]
+
+          m[col + 0] = m0*r00 + m1*r10 + m2*r20;
+          m[col + 1] = m0*r01 + m1*r11 + m2*r21;
+          m[col + 2] = m0*r02 + m1*r12 + m2*r22;
+      }
   };
 
   // matrices
@@ -41,12 +85,12 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
   const p = {
     basePos: opts.position ?? [0,0,0],
     // Animation parameters exactly matching tes2.html
-    legAngleMultiplier: 2,      // time * 2 for leg animation
-    legAngleAmplitude: 0.15,    // Math.sin(time * 2) * 0.15
-    orbitSpeed: 0.4,            // time * 0.2
-    orbitRadius: 1.0,           // orbit radius
-    pulseMultiplier: 2,         // time * 2 for pulsing
-    pulseAmplitude: 0.05,       // 1.0 + Math.sin(time * 2) * 0.05
+    legAngleMultiplier: 2,
+    legAngleAmplitude: 0.15,
+    orbitSpeed: 0.4,
+    orbitRadius: 1.0,
+    pulseMultiplier: 2,
+    pulseAmplitude: 0.05,
     enableOrbit: true,
     
     // Pivots matching tes2.html exactly
@@ -57,7 +101,8 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
 
     // ---- Backflip params ----
     flipDuration: 0.9,
-    flipAxis: 'x',
+    // *** BERUBAH: flipAxis sekarang adalah array [x, y, z] ***
+    flipAxis: [1, 0, 0], // Default flip sumbu X
     jumpHeight: 1.0,
     enableGroundSnap: false,
     groundY: 0.0,
@@ -65,9 +110,19 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
 
   // state backflip
   let flipProg = -1;
-  function flip(axis='x', duration=p.flipDuration, jump=p.jumpHeight){
+  // *** BERUBAH: flip() sekarang menangani string 'x','y','z' atau array [x,y,z] ***
+  function flip(axis, duration=p.flipDuration, jump=p.jumpHeight){
     if (flipProg < 0) {
-      p.flipAxis = axis || 'x';
+      if (typeof axis === 'string') {
+          if (axis === 'y') p.flipAxis = [0, 1, 0];
+          else if (axis === 'z') p.flipAxis = [0, 0, 1];
+          else p.flipAxis = [1, 0, 0]; // Default 'x'
+      } else if (Array.isArray(axis) && axis.length === 3) {
+          p.flipAxis = axis; // Gunakan array [x, y, z] secara langsung
+      } else {
+          p.flipAxis = [1, 0, 0]; // Fallback ke 'x'
+      }
+      
       p.flipDuration = Math.max(0.2, duration || p.flipDuration);
       p.jumpHeight = (jump ?? p.jumpHeight);
       flipProg = 0;
@@ -89,7 +144,7 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
       flipProg += dt / Math.max(0.0001, p.flipDuration);
       const k = Math.min(flipProg, 1);
       e = easeInOutCos(k);
-      flipAngle = e * Math.PI * 2.0;
+      flipAngle = e * Math.PI * 2.0; // Ini adalah total sudut rotasi
       gaitScale = 1 - e;
       if (flipProg >= 1) flipProg = -1;
     }
@@ -116,24 +171,35 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
     // ---- BACKFLIP transform ----
     let jumpY = 0;
     if (flipAngle !== 0) {
+      // jumpY tidak lagi menggunakan flipAngle, tapi easing 'e'
       jumpY = Math.sin(e * Math.PI) * (p.jumpHeight || 1.0);
     }
 
     // --- Build matrices exactly like tes2.html ---
+    // *** BERUBAH: Menambahkan rotasi flip ke SEMUA bagian ***
     
     // Body Core (with pulsing)
     M.body = get_I4();
     scale(M.body, pulse, pulse, pulse);        // 1. Local scaling
-    rotateY(M.body, -orbitAngle);              // 2. Orbit rotation
-    translate(M.body, orbitX, jumpY, orbitZ);  // 3. Global translation
+    if (flipAngle !== 0) {                     // 2. Flip Rotation
+        rotateAxis(M.body, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
+    rotateY(M.body, -orbitAngle);              // 3. Orbit rotation
+    translate(M.body, orbitX, jumpY, orbitZ);  // 4. Global translation
 
     // Head (no pulsing)
     M.head = get_I4();
+    if (flipAngle !== 0) {                     // 1. Flip Rotation
+        rotateAxis(M.head, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
     rotateY(M.head, -orbitAngle);              // 2. Orbit rotation
     translate(M.head, orbitX, jumpY, orbitZ);  // 3. Global translation
 
     // Tail (no pulsing)  
     M.tail = get_I4();
+    if (flipAngle !== 0) {                     // 1. Flip Rotation
+        rotateAxis(M.tail, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
     rotateY(M.tail, -orbitAngle);              // 2. Orbit rotation
     translate(M.tail, orbitX, jumpY, orbitZ);  // 3. Global translation
 
@@ -141,17 +207,23 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
     
     // Leg FL (Front Left)
     M.legFL = get_I4();
-    translate(M.legFL, p.pivot_FL[0], p.pivot_FL[1], p.pivot_FL[2]);
-    rotateX(M.legFL, legAngle);
-    translate(M.legFL, -p.pivot_FL[0], -p.pivot_FL[1], -p.pivot_FL[2]);
-    rotateY(M.legFL, -orbitAngle);
-    translate(M.legFL, orbitX, jumpY, orbitZ);
+    translate(M.legFL, p.pivot_FL[0], p.pivot_FL[1], p.pivot_FL[2]);   // 1. Pindah ke pivot
+    rotateX(M.legFL, legAngle);                                        // 2. Animasi kaki (local)
+    translate(M.legFL, -p.pivot_FL[0], -p.pivot_FL[1], -p.pivot_FL[2]);// 3. Kembali dari pivot
+    if (flipAngle !== 0) {                                             // 4. Flip Rotation
+        rotateAxis(M.legFL, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
+    rotateY(M.legFL, -orbitAngle);                                     // 5. Orbit rotation
+    translate(M.legFL, orbitX, jumpY, orbitZ);                         // 6. Global translation
 
     // Leg FR (Front Right)
     M.legFR = get_I4();
     translate(M.legFR, p.pivot_FR[0], p.pivot_FR[1], p.pivot_FR[2]);
     rotateX(M.legFR, -legAngle);  // opposite phase
     translate(M.legFR, -p.pivot_FR[0], -p.pivot_FR[1], -p.pivot_FR[2]);
+    if (flipAngle !== 0) {
+        rotateAxis(M.legFR, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
     rotateY(M.legFR, -orbitAngle);
     translate(M.legFR, orbitX, jumpY, orbitZ);
 
@@ -160,6 +232,9 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
     translate(M.legBL, p.pivot_BL[0], p.pivot_BL[1], p.pivot_BL[2]);
     rotateX(M.legBL, -legAngle);  // opposite phase
     translate(M.legBL, -p.pivot_BL[0], -p.pivot_BL[1], -p.pivot_BL[2]);
+    if (flipAngle !== 0) {
+        rotateAxis(M.legBL, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
     rotateY(M.legBL, -orbitAngle);
     translate(M.legBL, orbitX, jumpY, orbitZ);
 
@@ -168,6 +243,9 @@ export function createShinx(gl, createMesh, meshes, opts = {}) {
     translate(M.legBR, p.pivot_BR[0], p.pivot_BR[1], p.pivot_BR[2]);
     rotateX(M.legBR, legAngle);   // same phase as FL
     translate(M.legBR, -p.pivot_BR[0], -p.pivot_BR[1], -p.pivot_BR[2]);
+    if (flipAngle !== 0) {
+        rotateAxis(M.legBR, flipAngle, p.flipAxis[0], p.flipAxis[1], p.flipAxis[2]);
+    }
     rotateY(M.legBR, -orbitAngle);
     translate(M.legBR, orbitX, jumpY, orbitZ);
 

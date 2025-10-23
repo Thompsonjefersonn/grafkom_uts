@@ -16,15 +16,18 @@
 <canvas id="gl"></canvas>
 <div id="hint">Drag: look · WASD: move · Q/E: down/up · Scroll: dolly · F: flip Luxio · G: flip Luxray · H: flip Shinx</div>
 
+
 <script type="module">
 import { createLuxio }  from './Luxio/luxio-anim.js';
 import { createLuxray } from './Luxray/luxray-anim.js';
 import { createShinx }  from './Shinx/shinx-anim.js';
 
+
 /* ---------- WebGL setup ---------- */
 const canvas = document.getElementById('gl');
 const gl = canvas.getContext('webgl', { antialias:true });
 if(!gl){ alert('WebGL tidak tersedia'); throw new Error('No WebGL'); }
+
 
 const vsSrc = `
 attribute vec3 aPosition;
@@ -39,6 +42,7 @@ const fsSrc = `
 precision mediump float;
 varying vec3 vColor;
 void main(){ gl_FragColor = vec4(vColor, 1.0); }`;
+
 
 function compile(src, type){
   const s = gl.createShader(type);
@@ -58,6 +62,7 @@ if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
 }
 gl.useProgram(prog);
 
+
 const loc = {
   aPosition: gl.getAttribLocation(prog, 'aPosition'),
   aColor:    gl.getAttribLocation(prog, 'aColor'),
@@ -68,6 +73,7 @@ const loc = {
 gl.enableVertexAttribArray(loc.aPosition);
 gl.enableVertexAttribArray(loc.aColor);
 
+
 function createMesh(vertices, indices){
   const vb = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vb);
@@ -75,11 +81,13 @@ function createMesh(vertices, indices){
     vertices instanceof Float32Array ? vertices : new Float32Array(vertices),
     gl.STATIC_DRAW);
 
+
   const ib = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
     indices instanceof Uint16Array ? indices : new Uint16Array(indices),
     gl.STATIC_DRAW);
+
 
   return { vb, ib, count: (indices.length || indices.byteLength/2) };
 }
@@ -91,6 +99,7 @@ function drawMesh(buffers, model, wireframe=false){
   gl.uniformMatrix4fv(loc.uModel, false, model);
   gl.drawElements(wireframe ? gl.LINES : gl.TRIANGLES, buffers.count, gl.UNSIGNED_SHORT, 0);
 }
+
 
 /* ---------- env ---------- */
 function makeFlatPlane(size=200, y=0, color=[0.55,0.85,0.45]){
@@ -130,6 +139,161 @@ function makeGrassField(area=40, count=900){
   return createMesh(new Float32Array(verts), new Uint16Array(idx));
 }
 
+  function makeBox(w=0.2, h=1.2, d=0.2, color=[0.45,0.28,0.12]) {
+    const x=w*0.5, y=h*0.5, z=d*0.5, c=color;
+    // 8 verts, 6 faces (each face has its own 4 verts for flat colors)
+    const V = [];
+    const I = [];
+    function face(ax,ay,az, bx,by,bz, cx,cy,cz, dx,dy,dz){
+      const base = V.length/6;
+      V.push(
+        ax,ay,az, c[0],c[1],c[2],
+        bx,by,bz, c[0],c[1],c[2],
+        cx,cy,cz, c[0],c[1],c[2],
+        dx,dy,dz, c[0],c[1],c[2],
+      );
+      I.push(base,base+1,base+2, base,base+2,base+3);
+    }
+    // +X, -X, +Y, -Y, +Z, -Z
+    face( x,-y,-z, x,-y, z, x, y, z, x, y,-z);
+    face(-x,-y, z,-x,-y,-z,-x, y,-z,-x, y, z);
+    face(-x, y,-z, x, y,-z, x, y, z,-x, y, z);
+    face(-x,-y, z, x,-y, z, x,-y,-z,-x,-y,-z);
+    face(-x,-y, z,-x, y, z, x, y, z, x,-y, z);
+    face( x,-y,-z, x, y,-z,-x, y,-z,-x,-y,-z);
+    return createMesh(new Float32Array(V), new Uint16Array(I));
+  }
+
+    function makeCone(radius=0.9, height=1.6, seg=20, color=[0.18,0.5,0.22]) {
+    const V=[], I=[];
+    // tip
+    V.push(0,height,0, color[0],color[1],color[2]);
+    // base center
+    V.push(0,0,0,     color[0],color[1],color[2]);
+    // ring
+    for (let i=0;i<=seg;i++){
+      const a = (i/seg)*Math.PI*2;
+      const x = Math.cos(a)*radius;
+      const z = Math.sin(a)*radius;
+      V.push(x,0,z, color[0],color[1],color[2]);
+    }
+    // side triangles (tip -> ring i -> ring i+1)
+    for (let i=0;i<seg;i++){
+      I.push(0, 2+i, 2+i+1);
+    }
+    // base (fan from center)
+    for (let i=0;i<seg;i++){
+      I.push(1, 2+i+1, 2+i);
+    }
+    return createMesh(new Float32Array(V), new Uint16Array(I));
+  }
+  function makeBigRock(radius=1.2, jitter=0.22, baseColor=[0.42,0.41,0.40], subdiv=0) {
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const base = [
+    [-1,  phi, 0],[ 1,  phi, 0],[-1, -phi, 0],[ 1, -phi, 0],
+    [ 0, -1,  phi],[ 0,  1,  phi],[ 0, -1, -phi],[ 0,  1, -phi],
+    [ phi, 0, -1],[ phi, 0,  1],[ -phi, 0, -1],[ -phi, 0,  1],
+  ];
+  const faces0 = [
+    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+    [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+    [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+    [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
+  ];
+
+  // normalize helper
+  const norm = (v)=>{ const l=Math.hypot(v[0],v[1],v[2]); return [v[0]/l,v[1]/l,v[2]/l]; };
+  const len  = (v)=> Math.hypot(v[0],v[1],v[2]);
+
+  // 1) vertex dasar di-unit-kan
+  const unit = base.map(norm);
+
+  // 2) beri jitter SEKALI per-vertex → edge ketemu rapat
+  const radial = unit.map(()=> radius * (1 + (Math.random()*2-1)*jitter));
+  let P = unit.map((u,i)=> [u[0]*radial[i], u[1]*radial[i], u[2]*radial[i]]);
+  let F = faces0.map(f=> f.slice());
+
+  // 3) opsional subdivisi biar lebih halus (edge-split)
+  function subdivide(P,F,levels){
+    for(let lv=0; lv<levels; lv++){
+      const cache = new Map();   // "a_b" -> idx midpoint
+      const nextF = [];
+      function mid(a,b){
+        const key = a<b ? a+"_"+b : b+"_"+a;
+        if(cache.has(key)) return cache.get(key);
+        const ua = norm(P[a]), ub = norm(P[b]);
+        const dir = norm([ua[0]+ub[0], ua[1]+ub[1], ua[2]+ub[2]]);
+        // panjang midpoint: rata-rata panjang endpoint + sedikit noise kecil
+        const L = (len(P[a]) + len(P[b]))*0.5 * (1 + (Math.random()*2-1)*jitter*0.15);
+        const m = [dir[0]*L, dir[1]*L, dir[2]*L];
+        const id = P.push(m) - 1;
+        cache.set(key, id);
+        return id;
+      }
+      for(const [a,b,c] of F){
+        const ab = mid(a,b), bc = mid(b,c), ca = mid(c,a);
+        nextF.push([a,ab,ca], [b,bc,ab], [c,ca,bc], [ab,bc,ca]);
+      }
+      F = nextF;
+    }
+    return {P,F};
+  }
+  if(subdiv>0){
+    const r = subdivide(P,F,subdiv);
+    P = r.P; F = r.F;
+  }
+
+  // 4) build mesh: posisi pakai P (rapat), warna flat per-face
+  const verts = [], idx = [];
+  let vi = 0;
+  for(const tri of F){
+    const shade = 0.9 + (Math.random()-0.5)*0.15;
+    const c = [baseColor[0]*shade, baseColor[1]*shade, baseColor[2]*shade];
+    for(let k=0;k<3;k++){
+      const p = P[tri[k]];
+      verts.push(p[0], p[1], p[2], c[0], c[1], c[2]);
+    }
+    idx.push(vi, vi+1, vi+2);
+    vi += 3;
+  }
+  return createMesh(new Float32Array(verts), new Uint16Array(idx));
+}
+
+function makeRouteGrassPatchRect(x0, z0, x1, z1, tile=1.0, perTile=10) {
+  const verts=[], idx=[];
+  function addQuad(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, c){
+    const base = verts.length/6;
+    verts.push(
+      x0,y0,z0,  c[0],c[1],c[2],
+      x1,y1,z1,  c[0],c[1],c[2],
+      x2,y2,z2,  c[0],c[1],c[2],
+      x3,y3,z3,  c[0],c[1],c[2],
+    );
+    idx.push(base,base+1,base+2, base,base+2,base+3);
+  }
+  function addClump(cx, cz){
+    const y = 0;
+    const w = 0.10 + Math.random()*0.10;
+    const h = 0.28 + Math.random()*0.22;
+    const dark = 0.75 + Math.random()*0.12;
+    const c = [0.20*dark, 0.55*dark, 0.20*dark];
+    addQuad(cx-w,y,cz, cx+w,y,cz, cx+w,y+h,cz, cx-w,y+h,cz, c);
+    addQuad(cx,y,cz-w, cx,y,cz+w, cx,y+h,cz+w, cx,y+h,cz-w, c);
+  }
+  for (let x = x0; x < x1; x += tile){
+    for (let z = z0; z < z1; z += tile){
+      for (let n=0; n<perTile; n++){
+        const jx = (Math.random()*2-1)*(tile*0.45);
+        const jz = (Math.random()*2-1)*(tile*0.45);
+        addClump(x + tile*0.5 + jx, z + tile*0.5 + jz);
+      }
+    }
+  }
+  return createMesh(new Float32Array(verts), new Uint16Array(idx));
+}
+
+
+
 /* ---------- tiny mat4 & camera ---------- */
 const I = ()=>new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 function mul(A,B){
@@ -147,6 +311,7 @@ const P=(fov,aspect,near,far)=>{
   m[0]=f/aspect; m[5]=f; m[10]=(far+near)*nf; m[11]=-1; m[14]=2*far*near*nf;
   return m;
 };
+  const S=(sx,sy,sz)=>{const m=I(); m[0]=sx; m[5]=sy; m[10]=sz; return m;};
 function lookAt(eye, center, up=[0,1,0]){
   const zx=eye[0]-center[0], zy=eye[1]-center[1], zz=eye[2]-center[2];
   let zl=Math.hypot(zx,zy,zz); const z0=zx/zl, z1=zy/zl, z2=zz/zl;
@@ -161,6 +326,7 @@ function lookAt(eye, center, up=[0,1,0]){
   return m;
 }
 
+
 // FPS cam
 let camPos   = [0, 2.0, 8.0];     // posisi awal oke di +Z
 let camYaw   = Math.PI;           // <— awalnya 0.0, ganti 180° biar lihat ke -Z (ke belakang)
@@ -168,6 +334,7 @@ let camPitch = -0.15;             // tetap sedikit menunduk
 function getForward(){const cy=Math.cos(camYaw),sy=Math.sin(camYaw),cp=Math.cos(camPitch),sp=Math.sin(camPitch);return [sy*cp,sp,cy*cp];}
 function getRight(){const f=getForward(), up=[0,1,0]; const rx=f[1]*up[2]-f[2]*up[1], ry=f[2]*up[0]-f[0]*up[2], rz=f[0]*up[1]-f[1]*up[0]; const l=Math.hypot(rx,ry,rz); return [rx/l,ry/l,rz/l];}
 function getView(){const f=getForward();return lookAt(camPos,[camPos[0]+f[0],camPos[1]+f[1],camPos[2]+f[2]]);}
+
 
 let dragging=false,lastX=0,lastY=0; const LOOK_SENS=1.8;
 canvas.addEventListener('mousedown', e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
@@ -187,6 +354,7 @@ canvas.addEventListener('wheel', (e)=>{
   camPos[0]+=dir[0]*step; camPos[1]+=dir[1]*step; camPos[2]+=dir[2]*step;
 },{passive:false});
 
+
 function resize(){
   const w=canvas.clientWidth, h=canvas.clientHeight;
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
@@ -195,15 +363,18 @@ function resize(){
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0.75,0.91,1.00,1);
 
+
 /* ---------- init 3 model ---------- */
 // POSISI: Luxio kiri (-x), Shinx tengah, Luxray kanan (+x)
-const Luxio  = createLuxio (gl, createMesh,  undefined, { position: [-5,0,0] });
-const Shinx  = createShinx (gl, createMesh,  undefined, { position: [0, 0, 0] });
-const Luxray = createLuxray(gl, createMesh, undefined, { position: [5, 0, 0] });
- 
+  const Luxio  = createLuxio (gl, createMesh,  undefined, { position: [0,0,0] });
+  const Shinx  = createShinx (gl, createMesh,  undefined, { position: [-7, 0, 0] });
+  const Luxray = createLuxray(gl, createMesh, undefined, { position: [3, 0, 0] });
+
+
 
 // Jika signature Luxray masih (gl, createMesh, meshes, opts):
 // const Luxray = createLuxray(gl, createMesh, undefined, { position: [5,0,0] });
+
 
 window.addEventListener('keydown', (e)=>{
   const k=e.key.toLowerCase();
@@ -214,21 +385,76 @@ window.addEventListener('keydown', (e)=>{
 Luxio.params.enableGroundSnap = true;
 Luxio.params.groundY = 0.0;
 
+
 /* ---------- env meshes ---------- */
-const groundPlane = makeFlatPlane(200, 0.0, [0.55,0.85,0.45]);
-const grassField  = makeGrassField(40, 900);
+  const groundPlane = makeFlatPlane(200, 0.0, [0.55,0.85,0.45]);
+  const grassField  = makeGrassField(40, 900);
+  const trunk = makeBox(0.3,1.5,0.3, [0.45,0.28,0.12]);         // brownish
+  const leaves1a = makeCone(0.9, 1.0, 18, [0.18,0.50,0.22]);         // dark green
+  const leaves1b = makeCone(0.7, 0.9, 18, [0.20,0.60,0.26]);         // lighter green
+  const leaves1c = makeCone(0.5, 0.7, 18, [0.22,0.70,0.30]);
+
+  const rockMesh = makeBigRock(1.0, 0.25, [0.40,0.39,0.38]); // satu mesh reusable
+const rocks = [
+  { x:-13.5, z:  3.6, scale: 0.5, rotY: 0.3 },
+  { x:2, z:  3.5, scale: 0.5, rotY: 0.3 },
+
+];
+
+const trees = [
+  { x: 8,  z: 5  },
+  { x: 8,  z: 2  },
+  { x: 8,  z: -1  },
+  { x: 8,  z: -4  },
+  { x: 8,  z: -7  },
+  { x: 8,  z:-10 },
+
+  { x: -10, z: 5  },
+  { x: -10, z: 2  },
+  { x: -10, z: -1  },
+  { x: -10, z: -4  },
+  { x: -10, z: -7  },
+  { x: -10, z: -10 },
+
+  { x: 8,  z: -12.5 },
+  { x: 5, z: -12.5 },
+  { x: 2, z: -12.5 },
+  { x: -1, z: -12.5 },
+  { x: -4, z: -12.5 },
+  { x: -7, z: -12.5 },
+  { x: -10, z: -12.5 },
+
+
+ 
+];
+
+const routeGrass = makeRouteGrassPatchRect(
+  -9,  // x0 (kiri)
+  -11, // z0 (bawah)
+  7,   // x1 (kanan)
+  6,   // z1 (atas)
+  1.1, // ukuran tile grid (kecil = lebih rapi/rapat)
+  9    // rumpun per tile (besar = lebih padat)
+);
+
+// kalau mau beberapa segmen tetap:
+const routeGrass2 = makeRouteGrassPatchRect(-6, 6, 6, 10, 1.0, 8); // contoh segmen kedua
+
 
 /* ---------- loop ---------- */
 let last=0;
 const MODEL_Y = 1.0;              // angkat semua part dari tanah
 const baseOffset = T(0, MODEL_Y, 0);
 
+
 function tick(ms){
   resize();
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
+
   const t=ms*0.001;
   const dt=Math.min(0.05,(last?t-last:0.016)); last=t;
+
 
   const speed=(keys.has('shift')?12:6), step=speed*dt;
   const f=getForward(), r=getRight();
@@ -240,20 +466,34 @@ function tick(ms){
   if(keys.has('e')) camPos[1]+=step;
   camPos[1]=Math.max(0.5,camPos[1]);
 
+
   const proj=P(Math.PI/4, canvas.width/canvas.height, 0.1, 500);
   const view=getView();
   gl.uniformMatrix4fv(loc.uProj,false,proj);
   gl.uniformMatrix4fv(loc.uView,false,view);
 
+
   gl.uniformMatrix4fv(loc.uModel,false,I());
   drawMesh(groundPlane,I(),false);
   drawMesh(grassField,I(),false);
+  drawMesh(routeGrass, I(), false);
+
+  for (const r of rocks){
+  const modelRock = mul( T(r.x, 0.6*r.scale, r.z), mul( RY(r.rotY||0), S(r.scale, r.scale, r.scale) ) );
+  drawMesh(rockMesh, modelRock, false);
+}
+
 
   Luxio.update(dt);
   Shinx.update(dt);
   Luxray.update(dt);
 
+
   const D=(buf,mat)=> drawMesh(buf, mul(baseOffset, mat), false);
+
+
+
+
 
 
 
@@ -270,9 +510,12 @@ if (B.irisL) D(B.irisL, M.head);
 if (B.irisR) D(B.irisR, M.head);
 if (B.ringL) D(B.ringL, M.head);
 if (B.ringR) D(B.ringR, M.head);
+if (B.tail) D(B.tail, M.body);
+
 
 if (B.earL)  D(B.earL,  M.head);
 if (B.earR)  D(B.earR,  M.head);
+
 
 if (B.nose)    D(B.nose,    M.head);
 if (B.noseFur) D(B.noseFur, M.head);
@@ -280,11 +523,16 @@ if (B.smile)   D(B.smile,   M.head);
 
 
 
+
+
+
 if (B.legFL) D(B.legFL, M.legFL);
 if (B.legFR) D(B.legFR, M.legFR);
 if (B.legBL) D(B.legBL, M.legBL);
 if (B.legBR) D(B.legBR, M.legBR);
-if (B.static)D(B.static,M.static);
+
+
+
 
 
 
@@ -298,6 +546,7 @@ if (B.legFR) D(B.legFR, M.legFR);
 if (B.legBL) D(B.legBL, M.legBL);
 if (B.legBR) D(B.legBR, M.legBR);
 
+
 // --- lalu LUXIO ---
 B = Luxio.buffers; M = Luxio.M;
 if (B.body)  D(B.body,  M.body);
@@ -310,7 +559,24 @@ if (B.legBL) D(B.legBL, M.legBL);
 if (B.legBR) D(B.legBR, M.legBR);
 if (B.static)D(B.static,M.static);
 
+for (const {x,z} of trees) {
+    // --- trunk ---
+    const H_TRUNK = 1.5;         // your trunk height
+    const trunkModel = T(x, H_TRUNK * 0.5, z); // half height lift
 
+    // --- leaves stack (no sway, fixed & solid) ---
+    const baseY = H_TRUNK; // exactly top of trunk
+
+    // position each cone manually until it looks right (like you were doing)
+    const leavesA = T(x, baseY - 0.20, z);  // slightly overlapping into trunk
+    const leavesB = T(x, baseY + 0.30, z);
+    const leavesC = T(x, baseY + 0.80, z);
+
+    drawMesh(trunk,   trunkModel, false);
+    drawMesh(leaves1a, leavesA,   false);
+    drawMesh(leaves1b, leavesB,   false);
+    drawMesh(leaves1c, leavesC,   false);
+  }
 
 
   requestAnimationFrame(tick);

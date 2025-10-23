@@ -1,6 +1,6 @@
 // luxray-parts.js (Full Extended Version)
 // Disinkronkan otomatis dengan luxray-build.js
-// Mengelompokkan setiap mesh ke bagian logis (head/body/ear/legs/static)
+// Mengelompokkan setiap mesh ke bagian logis (head/body/ear/legs)
 import { buildLuxrayMeshes } from './luxray-build.js';
 
 // ---- util ----
@@ -51,22 +51,26 @@ export function buildLuxrayParts(createMesh){
 
   // Gabungan tail + star ke body
   const tailCombined = mergeList(
-    meshes.tail, meshes.tailBase, meshes.tailMid, meshes.tailEnd, meshes.star
+    meshes.tail, meshes.star
   );
+
+  // BODY (+ pindahan dari "static")
   const bodyCombined = mergeList(
     meshes.body, meshes.chest, meshes.neckBase,
     meshes.backFur, meshes.sideFurL, meshes.sideFurR,
     meshes.furBody1, meshes.furBody2, meshes.furBody3,
     meshes.frontConeL1, meshes.frontConeL2, meshes.frontConeL3,
-  meshes.frontConeR1, meshes.frontConeR2, meshes.frontConeR3,
-  tailCombined
+    meshes.frontConeR1, meshes.frontConeR2, meshes.frontConeR3,
+
+    // --- moved from former static ---
+    meshes.cover2,
+    meshes.selimut2, meshes.selimut3, meshes.selimut4,
+    meshes.cone, meshes.cone1, meshes.cone2, meshes.cone3, meshes.cone4, meshes.cone5,
+    meshes.ellipsoidData, meshes.line, meshes.sphere
   );
 
-  
-const nose    = meshes.nose    ?? meshes.noseMain ?? null;
-const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
-
-const claws1 = meshes.claws1 ?? meshes.claws1 ?? null;
+  const nose    = meshes.nose    ?? meshes.noseMain ?? null;
+  const noseFur = meshes.noseFur ?? meshes.noseFur ?? null;
 
   // Kepala (semua elemen kepala & wajah)
   const headCombined = mergeList(
@@ -88,39 +92,34 @@ const claws1 = meshes.claws1 ?? meshes.claws1 ?? null;
     meshes.earRight, meshes.earRight1, meshes.innerEarRight, meshes.earFurRight
   );
 
-  // Kaki depan kiri
+  // Kaki depan kiri (+ uplegFrontL)
   const legFL = mergeList(
-    meshes.leg1, meshes.legFrontL, meshes.foot1, meshes.claws3,
+    meshes.leg1, meshes.legFrontL, meshes.foot1, meshes.claws1,
     meshes.ring1, meshes.ring3, meshes.ring5, meshes.ring7,
     meshes.padsFrontL, meshes.sole1,
     meshes.coneFrontL1, meshes.coneFrontL2, meshes.coneFrontL3,
-    meshes.coneLegBackL1, meshes.coneLegBackL2, meshes.coneLegBackL3
+    meshes.coneLegBackL1, meshes.coneLegBackL2, meshes.coneLegBackL3,
+    meshes.uplegFrontL
   );
-  // Kaki depan kanan
+  // Kaki depan kanan (+ uplegFrontR)
   const legFR = mergeList(
-    meshes.leg2, meshes.legFrontR, meshes.foot2, meshes.claws1,
+    meshes.leg2, meshes.legFrontR, meshes.foot2, meshes.claws3,
     meshes.ring2, meshes.ring4, meshes.ring6, meshes.ring8,
     meshes.padsFrontR, meshes.sole2,
     meshes.coneFrontR1, meshes.coneFrontR2, meshes.coneFrontR3,
-    meshes.coneLegBackR1, meshes.coneLegBackR2, meshes.coneLegBackR3
+    meshes.coneLegBackR1, meshes.coneLegBackR2, meshes.coneLegBackR3,
+    meshes.uplegFrontR
   );
   // Kaki belakang kiri
   const legBL = mergeList(
-    meshes.leg3, meshes.foot3, meshes.claws3, meshes.padsBackL, meshes.sole3,
-    meshes.thighMuscle3, meshes.thighMuscleBack3 , meshes.claws4
+    meshes.leg3, meshes.foot3, meshes.padsBackL, meshes.sole3,
+    meshes.thighMuscle3, meshes.thighMuscleBack3, meshes.claws2
   );
   // Kaki belakang kanan
   const legBR = mergeList(
-    meshes.leg4, meshes.foot4, meshes.claws2, meshes.padsBackR, meshes.sole4,
-    meshes.thighMuscle4, meshes.thighMuscleBack4 , meshes.claws2
+    meshes.leg4, meshes.foot4, meshes.claws4, meshes.padsBackR, meshes.sole4,
+    meshes.thighMuscle4, meshes.thighMuscleBack4
   );
-
-  // Objek statis (dekorasi / aksesori / pelengkap)
-  const staticList = [
-    meshes.cover2, meshes.selimut2, meshes.selimut3, meshes.selimut4, meshes.uplegFrontL, meshes.uplegFrontR,
-    meshes.cone, meshes.cone1, meshes.cone2, meshes.cone3, meshes.cone4, meshes.cone5,
-    meshes.ellipsoidData, meshes.line, meshes.sphere
-  ].filter(Boolean);
 
   // ---- Grouped Parts ----
   const parts = {
@@ -128,6 +127,7 @@ const claws1 = meshes.claws1 ?? meshes.claws1 ?? null;
     head: headCombined,
     earL, earR,
     legFL, legFR, legBL, legBR,
+    tail: tailCombined,
   };
 
   // convert mesh → GPU buffer
@@ -135,14 +135,13 @@ const claws1 = meshes.claws1 ?? meshes.claws1 ?? null;
   for (const [k,m] of Object.entries(parts))
     if (m) buffers[k] = meshToBuffers(createMesh, m);
 
-  const staticMerged = staticList.length ? mergeMeshes(staticList) : null;
-  if (staticMerged) buffers.static = meshToBuffers(createMesh, staticMerged);
+  // (staticList & buffers.static dihapus)
 
   // ---- pivot per bagian ----
   const pivots = {};
-  if (parts.head) pivots.head = boundsOf(parts.head).center;
-  if (parts.earL) pivots.earL = boundsOf(parts.earL).center;
-  if (parts.earR) pivots.earR = boundsOf(parts.earR).center;
+  if (parts.head)  pivots.head  = boundsOf(parts.head).center;
+  if (parts.earL)  pivots.earL  = boundsOf(parts.earL).center;
+  if (parts.earR)  pivots.earR  = boundsOf(parts.earR).center;
   if (parts.legFL) pivots.legFL = boundsOf(parts.legFL).max;
   if (parts.legFR) pivots.legFR = boundsOf(parts.legFR).max;
   if (parts.legBL) pivots.legBL = boundsOf(parts.legBL).max;
